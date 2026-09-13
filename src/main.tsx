@@ -4,4 +4,8 @@ import '@fontsource-variable/dm-sans/index.css'
 import 'virtual:windi.css'
 import './styles/app.css'
 import App from './app/App'
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)

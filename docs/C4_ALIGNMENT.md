@@ -33,20 +33,20 @@ Diagram merangkum tanggung jawab dan dependensi, bukan kontrak jaringan baru. Br
 
 ## Pemetaan produk
 
-| Konsep produk | Padanan C4 / keputusan | Implementasi frontend |
-| --- | --- | --- |
-| Workspace | Batas produk dengan otorisasi tenant di backend | Switch workspace dan pemisahan state; API memakai workspace yang diizinkan |
-| Agent | Agent C4 dengan role, model, dan konfigurasi repository | Daftar/detail serta create Agent melalui kontrak resmi |
-| Mission / run | Tampilan atas Task; TaskSession adalah satu percobaan eksekusi | Tidak membuat orchestrator alternatif |
-| Workflow | Template langkah yang akhirnya menghasilkan Task | Simulasi lokal; katalog dan scheduler server perlu ekstensi |
-| Workforce pack | Agent Templates + Skills/Skill Packs + Workflow Templates | Instalasi atomik lokal; API memerlukan endpoint transaksi backend |
-| Live Office | Proyeksi visual state workspace | Phaser membaca store bersama; gerakan dekoratif tidak mengubah eksekusi |
-| Content Studio | Jenis pekerjaan tambahan di atas lifecycle task | Brief dan storyboard demo; provider media/publishing belum dihubungkan |
-| Skill markdown | Dokumen kemampuan yang harus divalidasi sebelum eksekusi | Disimpan sebagai teks; tidak memberi izin tool |
-| Output | Hasil pekerjaan; bukti Git delivery khusus pekerjaan kode | Demo markdown; result_summary C4 tampil di task; artifact API umum perlu ekstensi |
-| Approval | Keputusan manusia terikat artefak, tujuan, dan aksi | Demo review; general approval API belum tersedia |
-| Usage / billing | Entitlements dan ledger otoritatif di backend | Entitlements C4 dibaca; anggaran/reservasi demo terpisah |
-| BYOK | Model source; platform tetap menanggung biaya non-inference | Tidak menganggap BYOK berarti seluruh platform gratis |
+| Konsep produk   | Padanan C4 / keputusan                                         | Implementasi frontend                                                             |
+| --------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Workspace       | Batas produk dengan otorisasi tenant di backend                | Switch workspace dan pemisahan state; API memakai workspace yang diizinkan        |
+| Agent           | Agent C4 dengan role, model, dan konfigurasi repository        | Daftar/detail serta create Agent melalui kontrak resmi                            |
+| Mission / run   | Tampilan atas Task; TaskSession adalah satu percobaan eksekusi | Tidak membuat orchestrator alternatif                                             |
+| Workflow        | Template langkah yang akhirnya menghasilkan Task               | Simulasi lokal; katalog dan scheduler server perlu ekstensi                       |
+| Workforce pack  | Agent Templates + Skills/Skill Packs + Workflow Templates      | Instalasi atomik lokal; API memerlukan endpoint transaksi backend                 |
+| Live Office     | Proyeksi visual state workspace                                | Phaser membaca store bersama; gerakan dekoratif tidak mengubah eksekusi           |
+| Content Studio  | Jenis pekerjaan tambahan di atas lifecycle task                | Brief dan storyboard demo; provider media/publishing belum dihubungkan            |
+| Skill markdown  | Dokumen kemampuan yang harus divalidasi sebelum eksekusi       | Disimpan sebagai teks; tidak memberi izin tool                                    |
+| Output          | Hasil pekerjaan; bukti Git delivery khusus pekerjaan kode      | Demo markdown; result_summary C4 tampil di task; artifact API umum perlu ekstensi |
+| Approval        | Keputusan manusia terikat artefak, tujuan, dan aksi            | Demo review; general approval API belum tersedia                                  |
+| Usage / billing | Entitlements dan ledger otoritatif di backend                  | Entitlements C4 dibaca; anggaran/reservasi demo terpisah                          |
+| BYOK            | Model source; platform tetap menanggung biaya non-inference    | Tidak menganggap BYOK berarti seluruh platform gratis                             |
 
 ## Lifecycle dan delivery
 

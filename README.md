@@ -7,7 +7,7 @@ Frontend untuk workspace AI: Mission Control, workforce packs, task execution, d
 Gunakan Node.js 24 (minimum 22.12).
 
 ```sh
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
@@ -23,7 +23,7 @@ npm run test:e2e
 npm run preview
 ```
 
-CI menjalankan build produksi, pengujian domain/API, dan pengujian browser Chromium. Setelah validasi push branch fitur berhasil, CI menyimpan lockfile dan tangkapan layar pada branch yang sama. Gunakan `npm ci` setelah lockfile tersedia.
+CI menjalankan build produksi, pengujian domain/API, dan pengujian browser Chromium. Lockfile disertakan dalam repository. Hasil build, laporan browser, dan tangkapan layar tersedia sebagai artifact workflow Frontend validation.
 
 ## Yang tersedia
 

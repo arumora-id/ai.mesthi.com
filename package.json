@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json}\" index.html README.md \"docs/*.md\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json}\" index.html README.md \"docs/*.md\""
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "5.3.0",
@@ -30,6 +32,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.1",
+    "prettier": "3.6.2",
     "typescript": "7.0.2",
     "vite": "8.3.0",
     "vite-plugin-windicss": "1.9.4",

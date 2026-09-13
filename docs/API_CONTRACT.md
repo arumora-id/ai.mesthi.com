@@ -4,18 +4,18 @@ Adapter: `src/core/c4Adapter.ts`. DTO respons divalidasi dengan Zod. Canonical s
 
 ## Endpoint yang digunakan
 
-| Method | Path | Kegunaan |
-| --- | --- | --- |
-| GET | /v1/workspaces | Workspace yang diizinkan |
-| POST | /v1/workspaces | Workspace kosong; tidak mengklaim instalasi pack |
-| GET | /v1/workspaces/{workspace_id}/agents | Agent dalam workspace |
-| POST | /v1/workspaces/{workspace_id}/agents | name, role, model_source=mesthi_ai |
-| GET | /v1/workspaces/{workspace_id}/tasks | TaskRead untuk monitor |
-| POST | /v1/workspaces/{workspace_id}/tasks | agent_id, title, instructions, priority=normal |
-| POST | /v1/workspaces/{workspace_id}/tasks/{task_id}/queue | Queue eksplisit |
-| POST | /v1/workspaces/{workspace_id}/tasks/{task_id}/start | Start eksplisit |
-| POST | /v1/workspaces/{workspace_id}/tasks/{task_id}/cancel | Cancel eksplisit |
-| GET | /v1/workspaces/{workspace_id}/entitlements | Plan, limits, subscription, credits.available |
+| Method | Path                                                 | Kegunaan                                         |
+| ------ | ---------------------------------------------------- | ------------------------------------------------ |
+| GET    | /v1/workspaces                                       | Workspace yang diizinkan                         |
+| POST   | /v1/workspaces                                       | Workspace kosong; tidak mengklaim instalasi pack |
+| GET    | /v1/workspaces/{workspace_id}/agents                 | Agent dalam workspace                            |
+| POST   | /v1/workspaces/{workspace_id}/agents                 | name, role, model_source=mesthi_ai               |
+| GET    | /v1/workspaces/{workspace_id}/tasks                  | TaskRead untuk monitor                           |
+| POST   | /v1/workspaces/{workspace_id}/tasks                  | agent_id, title, instructions, priority=normal   |
+| POST   | /v1/workspaces/{workspace_id}/tasks/{task_id}/queue  | Queue eksplisit                                  |
+| POST   | /v1/workspaces/{workspace_id}/tasks/{task_id}/start  | Start eksplisit                                  |
+| POST   | /v1/workspaces/{workspace_id}/tasks/{task_id}/cancel | Cancel eksplisit                                 |
+| GET    | /v1/workspaces/{workspace_id}/entitlements           | Plan, limits, subscription, credits.available    |
 
 API polling hanya saat tab terlihat dan token tersedia, setiap 15 detik. Setiap request memiliki timeout 15 detik. Refresh yang sudah usang diabaikan setelah request/mutasi baru. Perintah mutasi tidak diulang otomatis. Jika perintah diterima tetapi refresh gagal, UI meminta refresh sebelum pengulangan.
 

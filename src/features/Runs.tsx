@@ -1,26 +1,400 @@
-
 import { useState } from 'react'
-import type { Run,RunStatus,Command } from '../core/domain'
-import { mode,useWorkspace } from '../core/runtime'
-import { Avatar,Empty,Icon,Modal,PageHeading,shortTime,Status,statusLabel } from '../components/ui'
-export function RunTable({runs,onOpen}:{runs:Run[];onOpen:(id:string)=>void}){
- const {agents}=useWorkspace()
- if(!runs.length)return <Empty title="A clear desk" text="Your team's work will appear here. Start a task when you're ready."/>
- return <div className="table-scroll"><table className="run-table"><thead><tr><th>Task</th><th>Agent</th><th>Status</th><th>Progress</th><th aria-label="Details"/></tr></thead><tbody>{runs.map(r=>{const a=agents.find(a=>a.id===r.agentId);return <tr key={r.id} onClick={()=>onOpen(r.id)}><td><button className="task-title" onClick={e=>{e.stopPropagation();onOpen(r.id)}}><span className="task-glyph"><Icon name="FileText" size={16}/></span><span>{r.title}<small>{shortTime(r.updatedAt)+' · '+(mode==='demo'?r.estimatedCredits+' credits estimated':'Backend task')}</small></span></button></td><td>{a?<span className="row gap-2"><Avatar agent={a} small/>{a.name}</span>:<span className="muted">Unassigned</span>}</td><td><Status status={r.status}/></td><td><div className="progress-cell"><div className="progress-track"><span style={{width:r.progress+'%'}}/></div><span>{mode==='api'&&r.status!=='completed'?'—':r.progress+'%'}</span></div></td><td><Icon name="ChevronRight" size={15}/></td></tr>})}</tbody></table></div>
+import type { Run, RunStatus, Command } from '../core/domain'
+import { mode, useWorkspace } from '../core/runtime'
+import {
+  Avatar,
+  Empty,
+  Icon,
+  Modal,
+  PageHeading,
+  shortTime,
+  Status,
+  statusLabel,
+} from '../components/ui'
+export function RunTable({ runs, onOpen }: { runs: Run[]; onOpen: (id: string) => void }) {
+  const { agents } = useWorkspace()
+  if (!runs.length)
+    return (
+      <Empty
+        title="A clear desk"
+        text="Your team's work will appear here. Start a task when you're ready."
+      />
+    )
+  return (
+    <div className="table-scroll">
+      <table className="run-table">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Agent</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th aria-label="Details" />
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((r) => {
+            const a = agents.find((a) => a.id === r.agentId)
+            return (
+              <tr key={r.id} onClick={() => onOpen(r.id)}>
+                <td>
+                  <button
+                    className="task-title"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onOpen(r.id)
+                    }}
+                  >
+                    <span className="task-glyph">
+                      <Icon name="FileText" size={16} />
+                    </span>
+                    <span>
+                      {r.title}
+                      <small>
+                        {shortTime(r.updatedAt) +
+                          ' · ' +
+                          (mode === 'demo'
+                            ? r.estimatedCredits + ' credits estimated'
+                            : 'Backend task')}
+                      </small>
+                    </span>
+                  </button>
+                </td>
+                <td>
+                  {a ? (
+                    <span className="row gap-2">
+                      <Avatar agent={a} small />
+                      {a.name}
+                    </span>
+                  ) : (
+                    <span className="muted">Unassigned</span>
+                  )}
+                </td>
+                <td>
+                  <Status status={r.status} />
+                </td>
+                <td>
+                  <div className="progress-cell">
+                    <div className="progress-track">
+                      <span style={{ width: r.progress + '%' }} />
+                    </div>
+                    <span>
+                      {mode === 'api' && r.status !== 'completed' ? '—' : r.progress + '%'}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <Icon name="ChevronRight" size={15} />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 }
-export function RunsPage({onNew,onOpen}:{onNew:()=>void;onOpen:(id:string)=>void}){
- const {runs}=useWorkspace();const [filter,setFilter]=useState('all'),[query,setQuery]=useState(''),[view,setView]=useState('list')
- const filtered=runs.filter(r=>(filter==='all'||r.status===filter)&&r.title.toLowerCase().includes(query.toLowerCase()))
- const columns:RunStatus[]=['draft','queued','running','delivering','awaiting_approval','paused','completed','failed','cancelled','unknown']
- return <><PageHeading eyebrow="MAKE PROGRESS VISIBLE" title="Tasks & runs" text="Every brief, every handoff, every outcome. All in one place." action={<button className="button primary" onClick={onNew}><Icon name="Plus"/>New task</button>}/><section className="panel"><div className="panel-toolbar"><div className="search-field"><Icon name="Search" size={16}/><input placeholder="Search tasks…" aria-label="Search tasks" value={query} onChange={e=>setQuery(e.target.value)}/></div><div className="row gap-3"><select aria-label="Filter task status" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All statuses</option>{Object.entries(statusLabel).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><div className="segmented"><button className={view==='list'?'active':''} onClick={()=>setView('list')} aria-label="List view"><Icon name="ListTodo" size={16}/></button><button className={view==='board'?'active':''} onClick={()=>setView('board')} aria-label="Board view"><Icon name="Layers" size={16}/></button></div></div></div>{view==='list'?<RunTable runs={filtered} onOpen={onOpen}/>:<div className="kanban">{columns.filter(s=>['running','awaiting_approval','completed'].includes(s)||filtered.some(r=>r.status===s)).map(s=><div className="kanban-column" key={s}><h3>{statusLabel[s]}<span>{filtered.filter(r=>r.status===s).length}</span></h3>{filtered.filter(r=>r.status===s).map(r=><button className="kanban-card" key={r.id} onClick={()=>onOpen(r.id)}><Icon name="FileText"/><strong>{r.title}</strong><Status status={r.status}/></button>)}</div>)}</div>}</section></>
+export function RunsPage({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) => void }) {
+  const { runs } = useWorkspace()
+  const [filter, setFilter] = useState('all'),
+    [query, setQuery] = useState(''),
+    [view, setView] = useState('list')
+  const filtered = runs.filter(
+    (r) =>
+      (filter === 'all' || r.status === filter) &&
+      r.title.toLowerCase().includes(query.toLowerCase()),
+  )
+  const columns: RunStatus[] = [
+    'draft',
+    'queued',
+    'running',
+    'delivering',
+    'awaiting_approval',
+    'paused',
+    'completed',
+    'failed',
+    'cancelled',
+    'unknown',
+  ]
+  return (
+    <>
+      <PageHeading
+        eyebrow="MAKE PROGRESS VISIBLE"
+        title="Tasks & runs"
+        text="Every brief, every handoff, every outcome. All in one place."
+        action={
+          <button className="button primary" onClick={onNew}>
+            <Icon name="Plus" />
+            New task
+          </button>
+        }
+      />
+      <section className="panel">
+        <div className="panel-toolbar">
+          <div className="search-field">
+            <Icon name="Search" size={16} />
+            <input
+              placeholder="Search tasks…"
+              aria-label="Search tasks"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="row gap-3">
+            <select
+              aria-label="Filter task status"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            >
+              <option value="all">All statuses</option>
+              {Object.entries(statusLabel).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+            <div className="segmented">
+              <button
+                className={view === 'list' ? 'active' : ''}
+                onClick={() => setView('list')}
+                aria-label="List view"
+              >
+                <Icon name="ListTodo" size={16} />
+              </button>
+              <button
+                className={view === 'board' ? 'active' : ''}
+                onClick={() => setView('board')}
+                aria-label="Board view"
+              >
+                <Icon name="Layers" size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+        {view === 'list' ? (
+          <RunTable runs={filtered} onOpen={onOpen} />
+        ) : (
+          <div className="kanban">
+            {columns
+              .filter(
+                (s) =>
+                  ['running', 'awaiting_approval', 'completed'].includes(s) ||
+                  filtered.some((r) => r.status === s),
+              )
+              .map((s) => (
+                <div className="kanban-column" key={s}>
+                  <h3>
+                    {statusLabel[s]}
+                    <span>{filtered.filter((r) => r.status === s).length}</span>
+                  </h3>
+                  {filtered
+                    .filter((r) => r.status === s)
+                    .map((r) => (
+                      <button className="kanban-card" key={r.id} onClick={() => onOpen(r.id)}>
+                        <Icon name="FileText" />
+                        <strong>{r.title}</strong>
+                        <Status status={r.status} />
+                      </button>
+                    ))}
+                </div>
+              ))}
+          </div>
+        )}
+      </section>
+    </>
+  )
 }
-export function RunDetail({runId,onClose}:{runId:string;onClose:()=>void}){
- const {runs,agents,workflows,command,activeId,busy,artifacts,navigate}=useWorkspace();const r=runs.find(r=>r.id===runId);if(!r)return null
- const a=agents.find(a=>a.id===r.agentId),f=workflows.find(f=>f.id===r.workflowId)
- const act=async(action:Extract<Command,{type:'run-action'}>['action'])=>{await command({type:'run-action',workspaceId:activeId,runId,action})}
- return <Modal title={r.title} onClose={onClose} wide><div className="row-between mt-4"><Status status={r.status}/>{a&&<span className="row gap-2"><Avatar agent={a} small/>{a.name+' · '+a.role}</span>}</div><section className="detail-section"><h3>Brief</h3><p className="pre-wrap">{r.brief}</p></section>{f&&<section className="detail-section"><h3>Workflow</h3><div className="step-pills">{f.steps.map((s,i)=><span key={s} className={r.progress>=(i+1)/f.steps.length*100?'done':''}><b>{i+1}</b>{s}</span>)}</div></section>}<section className="detail-section"><h3>Activity trail</h3><ol className="event-list">{r.log.map((event,i)=><li key={i}><i/><span>{event}</span></li>)}</ol></section>{r.status==='awaiting_approval'&&<div className="approval-notice"><Icon name="ShieldCheck"/><div><strong>A human decision is needed</strong><p>{mode==='demo'?'Approve to continue the local simulation. Nothing will be posted or sent.':'Review the exact artifact and destination before approval.'}</p><p className="pre-wrap">{r.brief}</p></div></div>}<details className="technical-detail"><summary>Execution details</summary><dl><dt>Workspace</dt><dd>{r.workspaceId}</dd><dt>Task / run</dt><dd>{r.taskId??r.id}</dd><dt>TaskSession</dt><dd>{r.taskSessionId??(mode==='demo'?'Not created in demo':'Not exposed by TaskRead')}</dd><dt>Delivery</dt><dd>{r.deliveryStatus??'Not exposed'}</dd><dt>Branch</dt><dd>{r.branchName??'Not available'}</dd><dt>Commit / remote SHA</dt><dd>{(r.commitSha??'Not exposed')+' / '+(r.remoteSha??'Not exposed')}</dd><dt>Backend status</dt><dd>{r.backendStatus??'Local demo'}</dd></dl></details><div className="modal-actions"><button className="button secondary" onClick={onClose}>Close</button>{mode==='demo'&&r.status==='running'&&<button disabled={busy} className="button secondary" onClick={()=>act('pause')}><Icon name="Pause"/>Pause</button>}{mode==='demo'&&r.status==='paused'&&<button disabled={busy} className="button primary" onClick={()=>act('resume')}><Icon name="Play"/>Resume</button>}{mode==='api'&&r.status==='draft'&&<button disabled={busy} className="button primary" onClick={()=>act('queue')}>Queue task</button>}{mode==='api'&&r.status==='queued'&&<button disabled={busy} className="button primary" onClick={()=>act('start')}>Start task</button>}{r.status==='awaiting_approval'&&<><button disabled={busy} className="button secondary" onClick={()=>act('reject')}>Reject</button><button disabled={busy} className="button primary" onClick={()=>act('approve')}><Icon name="Check"/>Approve draft</button></>}{!['completed','cancelled','failed','unknown'].includes(r.status)&&<button disabled={busy} className="button quiet danger" onClick={()=>act('cancel')}>Cancel run</button>}{artifacts.some(a=>a.runId===r.id)&&<button className="button primary" onClick={()=>{onClose();navigate('artifacts')}}>View output<Icon name="ArrowUpRight"/></button>}</div></Modal>
+export function RunDetail({ runId, onClose }: { runId: string; onClose: () => void }) {
+  const { runs, agents, workflows, command, activeId, busy, artifacts, navigate } = useWorkspace()
+  const r = runs.find((r) => r.id === runId)
+  if (!r) return null
+  const a = agents.find((a) => a.id === r.agentId),
+    f = workflows.find((f) => f.id === r.workflowId)
+  const act = async (action: Extract<Command, { type: 'run-action' }>['action']) => {
+    await command({ type: 'run-action', workspaceId: activeId, runId, action })
+  }
+  return (
+    <Modal title={r.title} onClose={onClose} wide>
+      <div className="row-between mt-4">
+        <Status status={r.status} />
+        {a && (
+          <span className="row gap-2">
+            <Avatar agent={a} small />
+            {a.name + ' · ' + a.role}
+          </span>
+        )}
+      </div>
+      <section className="detail-section">
+        <h3>Brief</h3>
+        <p className="pre-wrap">{r.brief}</p>
+      </section>
+      {f && (
+        <section className="detail-section">
+          <h3>Workflow</h3>
+          <div className="step-pills">
+            {f.steps.map((s, i) => (
+              <span
+                key={s}
+                className={r.progress >= ((i + 1) / f.steps.length) * 100 ? 'done' : ''}
+              >
+                <b>{i + 1}</b>
+                {s}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+      <section className="detail-section">
+        <h3>Activity trail</h3>
+        <ol className="event-list">
+          {r.log.map((event, i) => (
+            <li key={i}>
+              <i />
+              <span>{event}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+      {r.status === 'awaiting_approval' && (
+        <div className="approval-notice">
+          <Icon name="ShieldCheck" />
+          <div>
+            <strong>A human decision is needed</strong>
+            <p>
+              {mode === 'demo'
+                ? 'Approve to continue the local simulation. Nothing will be posted or sent.'
+                : 'Review the exact artifact and destination before approval.'}
+            </p>
+            <p className="pre-wrap">{r.brief}</p>
+          </div>
+        </div>
+      )}
+      <details className="technical-detail">
+        <summary>Execution details</summary>
+        <dl>
+          <dt>Workspace</dt>
+          <dd>{r.workspaceId}</dd>
+          <dt>Task / run</dt>
+          <dd>{r.taskId ?? r.id}</dd>
+          <dt>TaskSession</dt>
+          <dd>
+            {r.taskSessionId ??
+              (mode === 'demo' ? 'Not created in demo' : 'Not exposed by TaskRead')}
+          </dd>
+          <dt>Delivery</dt>
+          <dd>{r.deliveryStatus ?? 'Not exposed'}</dd>
+          <dt>Branch</dt>
+          <dd>{r.branchName ?? 'Not available'}</dd>
+          <dt>Commit / remote SHA</dt>
+          <dd>{(r.commitSha ?? 'Not exposed') + ' / ' + (r.remoteSha ?? 'Not exposed')}</dd>
+          <dt>Backend status</dt>
+          <dd>{r.backendStatus ?? 'Local demo'}</dd>
+        </dl>
+      </details>
+      <div className="modal-actions">
+        <button className="button secondary" onClick={onClose}>
+          Close
+        </button>
+        {mode === 'demo' && r.status === 'running' && (
+          <button disabled={busy} className="button secondary" onClick={() => act('pause')}>
+            <Icon name="Pause" />
+            Pause
+          </button>
+        )}
+        {mode === 'demo' && r.status === 'paused' && (
+          <button disabled={busy} className="button primary" onClick={() => act('resume')}>
+            <Icon name="Play" />
+            Resume
+          </button>
+        )}
+        {mode === 'api' && r.status === 'draft' && (
+          <button disabled={busy} className="button primary" onClick={() => act('queue')}>
+            Queue task
+          </button>
+        )}
+        {mode === 'api' && r.status === 'queued' && (
+          <button disabled={busy} className="button primary" onClick={() => act('start')}>
+            Start task
+          </button>
+        )}
+        {r.status === 'awaiting_approval' && (
+          <>
+            <button disabled={busy} className="button secondary" onClick={() => act('reject')}>
+              Reject
+            </button>
+            <button disabled={busy} className="button primary" onClick={() => act('approve')}>
+              <Icon name="Check" />
+              Approve draft
+            </button>
+          </>
+        )}
+        {!['completed', 'cancelled', 'failed', 'unknown'].includes(r.status) && (
+          <button disabled={busy} className="button quiet danger" onClick={() => act('cancel')}>
+            Cancel run
+          </button>
+        )}
+        {artifacts.some((a) => a.runId === r.id) && (
+          <button
+            className="button primary"
+            onClick={() => {
+              onClose()
+              navigate('artifacts')
+            }}
+          >
+            View output
+            <Icon name="ArrowUpRight" />
+          </button>
+        )}
+      </div>
+    </Modal>
+  )
 }
-export function ApprovalsPage({onOpen}:{onOpen:(id:string)=>void}){
- const {runs,agents}=useWorkspace(),pending=runs.filter(r=>r.status==='awaiting_approval')
- return <><PageHeading eyebrow="YOUR JUDGMENT MATTERS" title="Approvals" text="Your team does the groundwork. You make the final call."/><div className="approval-grid">{pending.map(r=><article className="panel approval-card" key={r.id}><div className="row-between"><span className="review-label"><Icon name="ShieldCheck"/>REVIEW REQUEST</span><span className="muted">{shortTime(r.updatedAt)}</span></div><h2>{r.title}</h2><p>{r.brief}</p><div className="row-between"><span className="muted">Prepared by {agents.find(a=>a.id===r.agentId)?.name??'your team'}</span><button className="button primary" onClick={()=>onOpen(r.id)}>Review draft<Icon name="ArrowRight"/></button></div></article>)}</div>{!pending.length&&<section className="panel"><Empty title={mode==='api'?'Approval API extension required':"You're all caught up"} text={mode==='api'?'The verified C4 contract does not expose a general content approval queue.':'Work that needs your approval will appear here before delivery.'}/></section>}</>
+export function ApprovalsPage({ onOpen }: { onOpen: (id: string) => void }) {
+  const { runs, agents } = useWorkspace(),
+    pending = runs.filter((r) => r.status === 'awaiting_approval')
+  return (
+    <>
+      <PageHeading
+        eyebrow="YOUR JUDGMENT MATTERS"
+        title="Approvals"
+        text="Your team does the groundwork. You make the final call."
+      />
+      <div className="approval-grid">
+        {pending.map((r) => (
+          <article className="panel approval-card" key={r.id}>
+            <div className="row-between">
+              <span className="review-label">
+                <Icon name="ShieldCheck" />
+                REVIEW REQUEST
+              </span>
+              <span className="muted">{shortTime(r.updatedAt)}</span>
+            </div>
+            <h2>{r.title}</h2>
+            <p>{r.brief}</p>
+            <div className="row-between">
+              <span className="muted">
+                Prepared by {agents.find((a) => a.id === r.agentId)?.name ?? 'your team'}
+              </span>
+              <button className="button primary" onClick={() => onOpen(r.id)}>
+                Review draft
+                <Icon name="ArrowRight" />
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+      {!pending.length && (
+        <section className="panel">
+          <Empty
+            title={mode === 'api' ? 'Approval API extension required' : "You're all caught up"}
+            text={
+              mode === 'api'
+                ? 'The verified C4 contract does not expose a general content approval queue.'
+                : 'Work that needs your approval will appear here before delivery.'
+            }
+          />
+        </section>
+      )}
+    </>
+  )
 }

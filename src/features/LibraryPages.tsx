@@ -1,21 +1,349 @@
-
-import { useState,type FormEvent } from 'react'
-import { useWorkspace,mode } from '../core/runtime'
+import { useState, type FormEvent } from 'react'
+import { useWorkspace, mode } from '../core/runtime'
 import { toolsCatalog } from '../core/catalog'
-import { downloadText,Empty,Field,Icon,Modal,PageHeading } from '../components/ui'
-export function ArtifactsPage(){
- const {artifacts}=useWorkspace();const [selected,setSelected]=useState(''),[query,setQuery]=useState(''),artifact=artifacts.find(a=>a.id===selected)
- const filtered=artifacts.filter(a=>a.name.toLowerCase().includes(query.toLowerCase()))
- return <><PageHeading eyebrow="IDEAS, NOW TANGIBLE" title="Outputs" text="The drafts, documents, and storyboards your team has brought together."/><div className="page-tools"><div className="search-field"><Icon name="Search" size={16}/><input aria-label="Search outputs" placeholder="Find an output…" value={query} onChange={e=>setQuery(e.target.value)}/></div><span className="muted">{artifacts.length} files</span></div><div className="artifact-grid">{filtered.map(a=><button key={a.id} className="panel artifact-card" onClick={()=>setSelected(a.id)}><div className={'artifact-preview '+a.kind}><span/><span/><span/><Icon name={a.kind==='storyboard'?'Film':'FileText'} size={36}/></div><div className="artifact-info"><small>{a.kind.toUpperCase()+' · MARKDOWN'}</small><h3>{a.name}</h3><span>{new Date(a.createdAt).toLocaleDateString()}<Icon name="ArrowUpRight" size={15}/></span></div></button>)}</div>{!filtered.length&&<section className="panel"><Empty title="Good work leaves something behind" text={mode==='demo'?'Complete a demo run to create a sample output, then preview or download it here.':'The C4 contract does not expose an artifact library. Task results remain visible in run details.'}/></section>}{artifact&&<Modal title={artifact.name} onClose={()=>setSelected('')} wide><pre className="document-preview">{artifact.content}</pre><div className="modal-actions"><button className="button secondary" onClick={()=>setSelected('')}>Close</button><button className="button primary" onClick={()=>downloadText(artifact.name,artifact.content)}><Icon name="Download"/>Download markdown</button></div></Modal>}</>
+import { downloadText, Empty, Field, Icon, Modal, PageHeading } from '../components/ui'
+export function ArtifactsPage() {
+  const { artifacts } = useWorkspace()
+  const [selected, setSelected] = useState(''),
+    [query, setQuery] = useState(''),
+    artifact = artifacts.find((a) => a.id === selected)
+  const filtered = artifacts.filter((a) => a.name.toLowerCase().includes(query.toLowerCase()))
+  return (
+    <>
+      <PageHeading
+        eyebrow="IDEAS, NOW TANGIBLE"
+        title="Outputs"
+        text="The drafts, documents, and storyboards your team has brought together."
+      />
+      <div className="page-tools">
+        <div className="search-field">
+          <Icon name="Search" size={16} />
+          <input
+            aria-label="Search outputs"
+            placeholder="Find an output…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <span className="muted">{artifacts.length} files</span>
+      </div>
+      <div className="artifact-grid">
+        {filtered.map((a) => (
+          <button key={a.id} className="panel artifact-card" onClick={() => setSelected(a.id)}>
+            <div className={'artifact-preview ' + a.kind}>
+              <span />
+              <span />
+              <span />
+              <Icon name={a.kind === 'storyboard' ? 'Film' : 'FileText'} size={36} />
+            </div>
+            <div className="artifact-info">
+              <small>{a.kind.toUpperCase() + ' · MARKDOWN'}</small>
+              <h3>{a.name}</h3>
+              <span>
+                {new Date(a.createdAt).toLocaleDateString()}
+                <Icon name="ArrowUpRight" size={15} />
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+      {!filtered.length && (
+        <section className="panel">
+          <Empty
+            title="Good work leaves something behind"
+            text={
+              mode === 'demo'
+                ? 'Complete a demo run to create a sample output, then preview or download it here.'
+                : 'The C4 contract does not expose an artifact library. Task results remain visible in run details.'
+            }
+          />
+        </section>
+      )}
+      {artifact && (
+        <Modal title={artifact.name} onClose={() => setSelected('')} wide>
+          <pre className="document-preview">{artifact.content}</pre>
+          <div className="modal-actions">
+            <button className="button secondary" onClick={() => setSelected('')}>
+              Close
+            </button>
+            <button
+              className="button primary"
+              onClick={() => downloadText(artifact.name, artifact.content)}
+            >
+              <Icon name="Download" />
+              Download markdown
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
 }
-export function KnowledgePage(){
- const {knowledge,activeId,command,busy}=useWorkspace();const [adding,setAdding]=useState(false),[selected,setSelected]=useState(''),[filter,setFilter]=useState('all'),[name,setName]=useState(''),[content,setContent]=useState(''),[category,setCategory]=useState<'knowledge'|'skill'>('knowledge'),[error,setError]=useState('')
- const doc=knowledge.find(k=>k.id===selected),filtered=knowledge.filter(k=>filter==='all'||k.category===filter)
- async function fileInput(file?:File){if(!file)return;if(!/\.(md|txt)$/i.test(file.name)||file.size>65536){setError('Upload a .md or .txt file up to 64 KB.');return}setName(file.name);setContent(await file.text());setError('')}
- async function submit(e:FormEvent){e.preventDefault();if(await command({type:'save-knowledge',workspaceId:activeId,name,content,category})){setAdding(false);setContent('');setName('')}}
- return <><PageHeading eyebrow="A SHARED UNDERSTANDING" title="Knowledge & skills" text="Give your agents context, a point of view, and a better way to work." action={<button className="button primary" disabled={mode==='api'} onClick={()=>setAdding(true)}><Icon name="Plus"/>Add document</button>}/><div className="page-tools"><div className="tabs">{['all','knowledge','skill'].map(f=><button key={f} className={filter===f?'active':''} onClick={()=>setFilter(f)}>{f==='all'?'All documents':f==='skill'?'Custom skills':'Knowledge'}</button>)}</div><span className="muted">Scoped to this workspace</span></div><section className="panel"><div className="document-list">{filtered.map(k=><button key={k.id} onClick={()=>setSelected(k.id)}><span className="document-icon"><Icon name={k.category==='skill'?'Zap':'BookOpen'} size={21}/></span><span><strong>{k.name}</strong><small>{(k.category==='skill'?'Markdown skill':'Reference document')+' · '+new Date(k.createdAt).toLocaleDateString()}</small></span><Icon name="ArrowUpRight" size={17}/></button>)}</div>{!filtered.length&&<Empty title="Give your team a little context" text={mode==='api'?'Knowledge and skill storage require the product API extension.':'Brand guidelines, product notes, and custom markdown skills belong here.'}/>}</section>{adding&&<Modal title="Add knowledge or a skill" description="Text is stored as a document. Uploading a skill does not grant tool permissions or execute instructions." onClose={()=>setAdding(false)}><form onSubmit={submit} className="stack gap-4"><Field label="Document title"><input required value={name} onChange={e=>setName(e.target.value)} maxLength={100} placeholder="e.g. Brand voice guidelines"/></Field><Field label="Category"><select value={category} onChange={e=>setCategory(e.target.value as typeof category)}><option value="knowledge">Knowledge</option><option value="skill">Custom markdown skill</option></select></Field><Field label="Import a document"><input type="file" accept=".md,.txt" onChange={e=>{void fileInput(e.target.files?.[0]);e.target.value=''}}/></Field><Field label="Content"><textarea rows={8} required maxLength={65536} value={content} onChange={e=>setContent(e.target.value)} placeholder="# What your team should know"/></Field>{error&&<p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={()=>setAdding(false)}>Cancel</button><button disabled={busy} className="button primary">Save document<Icon name="Check"/></button></div></form></Modal>}{doc&&<Modal title={doc.name} onClose={()=>setSelected('')} wide><pre className="document-preview">{doc.content}</pre><div className="modal-actions"><button className="button secondary" onClick={()=>setSelected('')}>Close</button><button className="button primary" onClick={()=>downloadText(doc.name.replace(/\.md$/,'')+'.md',doc.content)}><Icon name="Download"/>Download</button></div></Modal>}</>
+export function KnowledgePage() {
+  const { knowledge, activeId, command, busy } = useWorkspace()
+  const [adding, setAdding] = useState(false),
+    [selected, setSelected] = useState(''),
+    [filter, setFilter] = useState('all'),
+    [name, setName] = useState(''),
+    [content, setContent] = useState(''),
+    [category, setCategory] = useState<'knowledge' | 'skill'>('knowledge'),
+    [error, setError] = useState('')
+  const doc = knowledge.find((k) => k.id === selected),
+    filtered = knowledge.filter((k) => filter === 'all' || k.category === filter)
+  async function fileInput(file?: File) {
+    if (!file) return
+    if (!/\.(md|txt)$/i.test(file.name) || file.size > 65536) {
+      setError('Upload a .md or .txt file up to 64 KB.')
+      return
+    }
+    setName(file.name)
+    setContent(await file.text())
+    setError('')
+  }
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    if (await command({ type: 'save-knowledge', workspaceId: activeId, name, content, category })) {
+      setAdding(false)
+      setContent('')
+      setName('')
+    }
+  }
+  return (
+    <>
+      <PageHeading
+        eyebrow="A SHARED UNDERSTANDING"
+        title="Knowledge & skills"
+        text="Give your agents context, a point of view, and a better way to work."
+        action={
+          <button
+            className="button primary"
+            disabled={mode === 'api'}
+            onClick={() => setAdding(true)}
+          >
+            <Icon name="Plus" />
+            Add document
+          </button>
+        }
+      />
+      <div className="page-tools">
+        <div className="tabs">
+          {['all', 'knowledge', 'skill'].map((f) => (
+            <button key={f} className={filter === f ? 'active' : ''} onClick={() => setFilter(f)}>
+              {f === 'all' ? 'All documents' : f === 'skill' ? 'Custom skills' : 'Knowledge'}
+            </button>
+          ))}
+        </div>
+        <span className="muted">Scoped to this workspace</span>
+      </div>
+      <section className="panel">
+        <div className="document-list">
+          {filtered.map((k) => (
+            <button key={k.id} onClick={() => setSelected(k.id)}>
+              <span className="document-icon">
+                <Icon name={k.category === 'skill' ? 'Zap' : 'BookOpen'} size={21} />
+              </span>
+              <span>
+                <strong>{k.name}</strong>
+                <small>
+                  {(k.category === 'skill' ? 'Markdown skill' : 'Reference document') +
+                    ' · ' +
+                    new Date(k.createdAt).toLocaleDateString()}
+                </small>
+              </span>
+              <Icon name="ArrowUpRight" size={17} />
+            </button>
+          ))}
+        </div>
+        {!filtered.length && (
+          <Empty
+            title="Give your team a little context"
+            text={
+              mode === 'api'
+                ? 'Knowledge and skill storage require the product API extension.'
+                : 'Brand guidelines, product notes, and custom markdown skills belong here.'
+            }
+          />
+        )}
+      </section>
+      {adding && (
+        <Modal
+          title="Add knowledge or a skill"
+          description="Text is stored as a document. Uploading a skill does not grant tool permissions or execute instructions."
+          onClose={() => setAdding(false)}
+        >
+          <form onSubmit={submit} className="stack gap-4">
+            <Field label="Document title">
+              <input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={100}
+                placeholder="e.g. Brand voice guidelines"
+              />
+            </Field>
+            <Field label="Category">
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as typeof category)}
+              >
+                <option value="knowledge">Knowledge</option>
+                <option value="skill">Custom markdown skill</option>
+              </select>
+            </Field>
+            <Field label="Import a document">
+              <input
+                type="file"
+                accept=".md,.txt"
+                onChange={(e) => {
+                  void fileInput(e.target.files?.[0])
+                  e.target.value = ''
+                }}
+              />
+            </Field>
+            <Field label="Content">
+              <textarea
+                rows={8}
+                required
+                maxLength={65536}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="# What your team should know"
+              />
+            </Field>
+            {error && <p className="form-error">{error}</p>}
+            <div className="modal-actions">
+              <button type="button" className="button secondary" onClick={() => setAdding(false)}>
+                Cancel
+              </button>
+              <button disabled={busy} className="button primary">
+                Save document
+                <Icon name="Check" />
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {doc && (
+        <Modal title={doc.name} onClose={() => setSelected('')} wide>
+          <pre className="document-preview">{doc.content}</pre>
+          <div className="modal-actions">
+            <button className="button secondary" onClick={() => setSelected('')}>
+              Close
+            </button>
+            <button
+              className="button primary"
+              onClick={() => downloadText(doc.name.replace(/\.md$/, '') + '.md', doc.content)}
+            >
+              <Icon name="Download" />
+              Download
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
 }
-export function ConnectionsPage(){
- const {connections,command,activeId,busy}=useWorkspace();const [selected,setSelected]=useState(''),tool=toolsCatalog.find(t=>t.id===selected)
- return <><PageHeading eyebrow="A WORLD OF TOOLS, ONE WORKSPACE" title="Connections" text="Bring the tools your team needs. Keep permissions and public actions in your hands."/><div className="connection-notice"><Icon name="Plug"/><div><strong>{mode==='demo'?'Explore connections in demo mode':'Your tool gateway'}</strong><p>{mode==='demo'?'Enabling a demo connection only changes local configuration. No account is connected and no credentials are requested.':'OAuth, MCP, and provider credential management need the connector API extension.'}</p></div></div><div className="connection-grid">{toolsCatalog.map(t=>{const status=connections.find(c=>c.toolId===t.id)?.status;return <article key={t.id} className="panel connection-card"><div className="row-between"><span className={'connection-logo '+t.id}><Icon name={t.icon} size={27}/></span><span className="muted">{t.category}</span></div><h2>{t.name}</h2><p>{t.description}</p><footer><span className={'connection-status '+(['demo','connected'].includes(status??'')?'enabled':'')}><i/>{status==='demo'?'Demo configured':status==='connected'?'Connected':'Not connected'}</span><button className="button secondary" onClick={()=>setSelected(t.id)}>Configure<Icon name="ArrowUpRight" size={14}/></button></footer></article>})}</div>{tool&&<Modal title={'Configure '+tool.name} onClose={()=>setSelected('')}><div className="detail-section"><p>{tool.description}</p><dl className="connection-details"><dt>Workspace scope</dt><dd>Current workspace only</dd><dt>Transport</dt><dd>{tool.transport}</dd><dt>External actions</dt><dd>Human approval required</dd><dt>Mode</dt><dd>{mode==='demo'?'Local demo configuration':'Backend extension required'}</dd></dl></div><div className="modal-actions"><button className="button secondary" onClick={()=>setSelected('')}>Close</button><button disabled={busy||mode==='api'} className="button primary" onClick={async()=>{if(await command({type:'configure-connection',workspaceId:activeId,toolId:tool.id,enabled:!connections.some(c=>c.toolId===tool.id&&c.status==='demo')}))setSelected('')}}>{connections.some(c=>c.toolId===tool.id&&c.status==='demo')?'Disable demo connection':'Enable demo connection'}</button></div></Modal>}</>
+export function ConnectionsPage() {
+  const { connections, command, activeId, busy } = useWorkspace()
+  const [selected, setSelected] = useState(''),
+    tool = toolsCatalog.find((t) => t.id === selected)
+  return (
+    <>
+      <PageHeading
+        eyebrow="A WORLD OF TOOLS, ONE WORKSPACE"
+        title="Connections"
+        text="Bring the tools your team needs. Keep permissions and public actions in your hands."
+      />
+      <div className="connection-notice">
+        <Icon name="Plug" />
+        <div>
+          <strong>
+            {mode === 'demo' ? 'Explore connections in demo mode' : 'Your tool gateway'}
+          </strong>
+          <p>
+            {mode === 'demo'
+              ? 'Enabling a demo connection only changes local configuration. No account is connected and no credentials are requested.'
+              : 'OAuth, MCP, and provider credential management need the connector API extension.'}
+          </p>
+        </div>
+      </div>
+      <div className="connection-grid">
+        {toolsCatalog.map((t) => {
+          const status = connections.find((c) => c.toolId === t.id)?.status
+          return (
+            <article key={t.id} className="panel connection-card">
+              <div className="row-between">
+                <span className={'connection-logo ' + t.id}>
+                  <Icon name={t.icon} size={27} />
+                </span>
+                <span className="muted">{t.category}</span>
+              </div>
+              <h2>{t.name}</h2>
+              <p>{t.description}</p>
+              <footer>
+                <span
+                  className={
+                    'connection-status ' +
+                    (['demo', 'connected'].includes(status ?? '') ? 'enabled' : '')
+                  }
+                >
+                  <i />
+                  {status === 'demo'
+                    ? 'Demo configured'
+                    : status === 'connected'
+                      ? 'Connected'
+                      : 'Not connected'}
+                </span>
+                <button className="button secondary" onClick={() => setSelected(t.id)}>
+                  Configure
+                  <Icon name="ArrowUpRight" size={14} />
+                </button>
+              </footer>
+            </article>
+          )
+        })}
+      </div>
+      {tool && (
+        <Modal title={'Configure ' + tool.name} onClose={() => setSelected('')}>
+          <div className="detail-section">
+            <p>{tool.description}</p>
+            <dl className="connection-details">
+              <dt>Workspace scope</dt>
+              <dd>Current workspace only</dd>
+              <dt>Transport</dt>
+              <dd>{tool.transport}</dd>
+              <dt>External actions</dt>
+              <dd>Human approval required</dd>
+              <dt>Mode</dt>
+              <dd>{mode === 'demo' ? 'Local demo configuration' : 'Backend extension required'}</dd>
+            </dl>
+          </div>
+          <div className="modal-actions">
+            <button className="button secondary" onClick={() => setSelected('')}>
+              Close
+            </button>
+            <button
+              disabled={busy || mode === 'api'}
+              className="button primary"
+              onClick={async () => {
+                if (
+                  await command({
+                    type: 'configure-connection',
+                    workspaceId: activeId,
+                    toolId: tool.id,
+                    enabled: !connections.some((c) => c.toolId === tool.id && c.status === 'demo'),
+                  })
+                )
+                  setSelected('')
+              }}
+            >
+              {connections.some((c) => c.toolId === tool.id && c.status === 'demo')
+                ? 'Disable demo connection'
+                : 'Enable demo connection'}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
 }

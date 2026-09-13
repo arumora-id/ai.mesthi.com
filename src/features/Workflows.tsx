@@ -1,20 +1,280 @@
-
-import { lazy,Suspense,useState } from 'react'
+import { useState } from 'react'
 import { packs } from '../core/catalog'
-import { mode,useWorkspace } from '../core/runtime'
-import { Avatar,Empty,Icon,PageHeading } from '../components/ui'
-import { CreateRun,CreateWorkspace } from './CreateDialogs'
-const OfficeCanvas=lazy(()=>import('../game/OfficeCanvas'))
-export function TemplatesPage(){
- const [pack,setPack]=useState<string|null>(null)
- return <><PageHeading eyebrow="START WITH A LITTLE HEAD START" title="Workforce packs" text="Good work starts with the right team. Pick a pack and make it yours."/><div className="template-banner"><span className="template-graphic"><Icon name="Layers" size={60}/><i/><b/></span><div><span className="eyebrow">BUILT-IN COLLECTION / 01</span><h2>Your next team is already assembled.</h2><p>Agents, skills, workflows, and thoughtful defaults. One pack. A whole world of possibilities.</p></div><span className="collection-tag">CURATED<br/>BY MESTHI</span></div><div className="template-grid">{packs.map((p,i)=><article className="panel template-card" key={p.id}><div className="template-cover" style={{background:p.color}}><span className="template-index">{'0'+(i+1)+' / WORKFORCE'}</span><Icon name={p.icon} size={59}/><span className="template-cover-line"/></div><div className="template-content"><span className="eyebrow">{p.id==='custom'?'YOUR IDEAS, YOUR RULES':'BUILT-IN PACK'}</span><h2>{p.name}</h2><p>{p.description}</p><div className="template-counts"><span><Icon name="Bot" size={15}/>{p.agents.length} agents</span><span><Icon name="Zap" size={15}/>{p.skills.length} skills</span><span><Icon name="GitBranch" size={15}/>{p.workflows.length} flows</span></div><div className="template-footer"><span>{p.id==='custom'?'A fresh start':'Included · v1.0'}</span><button className="button secondary" disabled={mode==='api'&&p.id!=='custom'} onClick={()=>setPack(p.id)}>{p.id==='custom'?'Create workspace':'Use this pack'}<Icon name="ArrowUpRight" size={15}/></button></div>{mode==='api'&&p.id!=='custom'&&<small className="muted">Pack installation needs a backend extension.</small>}</div></article>)}</div><p className="page-footnote"><Icon name="ShieldCheck" size={15}/>All demo packs begin with human review for external actions. Paid marketplace listings are planned for a later release.</p>{pack&&<CreateWorkspace selectedPack={pack} onClose={()=>setPack(null)}/>}</>
+import { mode, useWorkspace } from '../core/runtime'
+import { Avatar, Empty, Icon, PageHeading } from '../components/ui'
+import { CreateRun, CreateWorkspace } from './CreateDialogs'
+import OfficeView from '../game/OfficeView'
+export function TemplatesPage() {
+  const [pack, setPack] = useState<string | null>(null)
+  return (
+    <>
+      <PageHeading
+        eyebrow="START WITH A LITTLE HEAD START"
+        title="Workforce packs"
+        text="Good work starts with the right team. Pick a pack and make it yours."
+      />
+      <div className="template-banner">
+        <span className="template-graphic">
+          <Icon name="Layers" size={60} />
+          <i />
+          <b />
+        </span>
+        <div>
+          <span className="eyebrow">BUILT-IN COLLECTION / 01</span>
+          <h2>Your next team is already assembled.</h2>
+          <p>
+            Agents, skills, workflows, and thoughtful defaults. One pack. A whole world of
+            possibilities.
+          </p>
+        </div>
+        <span className="collection-tag">
+          CURATED
+          <br />
+          BY MESTHI
+        </span>
+      </div>
+      <div className="template-grid">
+        {packs.map((p, i) => (
+          <article className="panel template-card" key={p.id}>
+            <div className="template-cover" style={{ background: p.color }}>
+              <span className="template-index">{'0' + (i + 1) + ' / WORKFORCE'}</span>
+              <Icon name={p.icon} size={59} />
+              <span className="template-cover-line" />
+            </div>
+            <div className="template-content">
+              <span className="eyebrow">
+                {p.id === 'custom' ? 'YOUR IDEAS, YOUR RULES' : 'BUILT-IN PACK'}
+              </span>
+              <h2>{p.name}</h2>
+              <p>{p.description}</p>
+              <div className="template-counts">
+                <span>
+                  <Icon name="Bot" size={15} />
+                  {p.agents.length} agents
+                </span>
+                <span>
+                  <Icon name="Zap" size={15} />
+                  {p.skills.length} skills
+                </span>
+                <span>
+                  <Icon name="GitBranch" size={15} />
+                  {p.workflows.length} flows
+                </span>
+              </div>
+              <div className="template-footer">
+                <span>{p.id === 'custom' ? 'A fresh start' : 'Included · v1.0'}</span>
+                <button
+                  className="button secondary"
+                  disabled={mode === 'api' && p.id !== 'custom'}
+                  onClick={() => setPack(p.id)}
+                >
+                  {p.id === 'custom' ? 'Create workspace' : 'Use this pack'}
+                  <Icon name="ArrowUpRight" size={15} />
+                </button>
+              </div>
+              {mode === 'api' && p.id !== 'custom' && (
+                <small className="muted">Pack installation needs a backend extension.</small>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+      <p className="page-footnote">
+        <Icon name="ShieldCheck" size={15} />
+        All demo packs begin with human review for external actions. Paid marketplace listings are
+        planned for a later release.
+      </p>
+      {pack && <CreateWorkspace selectedPack={pack} onClose={() => setPack(null)} />}
+    </>
+  )
 }
-export function WorkflowsPage(){
- const {workflows,command,activeId,busy}=useWorkspace();const [runFlow,setRunFlow]=useState('')
- return <><PageHeading eyebrow="A REPEATABLE PATH TO GREAT WORK" title="Workflows" text="Connect the steps, give your team direction, and keep important decisions in view."/><div className="workflow-list">{workflows.map(f=><article className="panel workflow-card" key={f.id}><div className="row-between"><div className="row gap-3"><span className="workflow-icon"><Icon name="GitBranch" size={24}/></span><div><h2>{f.name}</h2><p>{f.description}</p></div></div><label className="toggle-label"><span>{f.enabled?'Enabled':'Paused'}</span><input type="checkbox" checked={f.enabled} disabled={busy} aria-label={'Enable '+f.name} onChange={e=>{void command({type:'update-workflow',workspaceId:activeId,workflowId:f.id,trigger:f.trigger,enabled:e.target.checked})}}/></label></div><div className="workflow-steps">{f.steps.map((s,i)=><div className={'workflow-step '+(s==='Approval'?'approval-step':'')} key={s}><span>{s==='Approval'?<Icon name="ShieldCheck" size={18}/>:<b>{String(i+1).padStart(2,'0')}</b>}</span><strong>{s}</strong>{i<f.steps.length-1&&<Icon name="ArrowRight" className="step-arrow" size={15}/>}</div>)}</div><footer className="row-between"><div className="row gap-4"><label className="row gap-2"><Icon name="Clock3" size={16}/><select aria-label={'Trigger for '+f.name} value={f.trigger} disabled={busy} onChange={e=>{void command({type:'update-workflow',workspaceId:activeId,workflowId:f.id,trigger:e.target.value as 'manual'|'daily'|'weekly',enabled:f.enabled})}}><option value="manual">Manual trigger</option><option value="daily">Daily · 09:00 UTC</option><option value="weekly">Monday · 09:00 UTC</option></select></label><span className="muted">{'~'+f.estimatedCredits+' credits / run'}</span></div><button className="button secondary" disabled={!f.enabled} onClick={()=>setRunFlow(f.id)}><Icon name="Play" size={14}/>Run workflow</button></footer>{f.trigger!=='manual'&&<p className="schedule-note">Schedule preference saved. Demo mode does not execute background schedules.</p>}</article>)}</div>{!workflows.length&&<Empty title="Your first workflow starts here" text={mode==='api'?'C4 provides task execution. Workflow templates need a product API extension.':'Install a workforce pack to add its workflows.'}/>} {runFlow&&<CreateRun workflowId={runFlow} onClose={()=>setRunFlow('')}/>}</>
+export function WorkflowsPage() {
+  const { workflows, command, activeId, busy } = useWorkspace()
+  const [runFlow, setRunFlow] = useState('')
+  return (
+    <>
+      <PageHeading
+        eyebrow="A REPEATABLE PATH TO GREAT WORK"
+        title="Workflows"
+        text="Connect the steps, give your team direction, and keep important decisions in view."
+      />
+      <div className="workflow-list">
+        {workflows.map((f) => (
+          <article className="panel workflow-card" key={f.id}>
+            <div className="row-between">
+              <div className="row gap-3">
+                <span className="workflow-icon">
+                  <Icon name="GitBranch" size={24} />
+                </span>
+                <div>
+                  <h2>{f.name}</h2>
+                  <p>{f.description}</p>
+                </div>
+              </div>
+              <label className="toggle-label">
+                <span>{f.enabled ? 'Enabled' : 'Paused'}</span>
+                <input
+                  type="checkbox"
+                  checked={f.enabled}
+                  disabled={busy}
+                  aria-label={'Enable ' + f.name}
+                  onChange={(e) => {
+                    void command({
+                      type: 'update-workflow',
+                      workspaceId: activeId,
+                      workflowId: f.id,
+                      trigger: f.trigger,
+                      enabled: e.target.checked,
+                    })
+                  }}
+                />
+              </label>
+            </div>
+            <div className="workflow-steps">
+              {f.steps.map((s, i) => (
+                <div
+                  className={'workflow-step ' + (s === 'Approval' ? 'approval-step' : '')}
+                  key={s}
+                >
+                  <span>
+                    {s === 'Approval' ? (
+                      <Icon name="ShieldCheck" size={18} />
+                    ) : (
+                      <b>{String(i + 1).padStart(2, '0')}</b>
+                    )}
+                  </span>
+                  <strong>{s}</strong>
+                  {i < f.steps.length - 1 && (
+                    <Icon name="ArrowRight" className="step-arrow" size={15} />
+                  )}
+                </div>
+              ))}
+            </div>
+            <footer className="row-between">
+              <div className="row gap-4">
+                <label className="row gap-2">
+                  <Icon name="Clock3" size={16} />
+                  <select
+                    aria-label={'Trigger for ' + f.name}
+                    value={f.trigger}
+                    disabled={busy}
+                    onChange={(e) => {
+                      void command({
+                        type: 'update-workflow',
+                        workspaceId: activeId,
+                        workflowId: f.id,
+                        trigger: e.target.value as 'manual' | 'daily' | 'weekly',
+                        enabled: f.enabled,
+                      })
+                    }}
+                  >
+                    <option value="manual">Manual trigger</option>
+                    <option value="daily">Daily · 09:00 UTC</option>
+                    <option value="weekly">Monday · 09:00 UTC</option>
+                  </select>
+                </label>
+                <span className="muted">{'~' + f.estimatedCredits + ' credits / run'}</span>
+              </div>
+              <button
+                className="button secondary"
+                disabled={!f.enabled}
+                onClick={() => setRunFlow(f.id)}
+              >
+                <Icon name="Play" size={14} />
+                Run workflow
+              </button>
+            </footer>
+            {f.trigger !== 'manual' && (
+              <p className="schedule-note">
+                Schedule preference saved. Demo mode does not execute background schedules.
+              </p>
+            )}
+          </article>
+        ))}
+      </div>
+      {!workflows.length && (
+        <Empty
+          title="Your first workflow starts here"
+          text={
+            mode === 'api'
+              ? 'C4 provides task execution. Workflow templates need a product API extension.'
+              : 'Install a workforce pack to add its workflows.'
+          }
+        />
+      )}{' '}
+      {runFlow && <CreateRun workflowId={runFlow} onClose={() => setRunFlow('')} />}
+    </>
+  )
 }
-export function OfficePage({onAgent}:{onAgent:(id:string)=>void}){
- const {agents,navigate}=useWorkspace();const [motion,setMotion]=useState(true)
- const objects=[['GitBranch','Whiteboard','workflows'],['ListTodo','Computers','runs'],['ShieldCheck','Meeting room','approvals'],['BookOpen','Bookshelf','knowledge'],['Activity','Team display','usage'],['Coffee','Lounge','agents']] as const
- return <><PageHeading eyebrow="WELCOME TO YOUR SHARED SPACE" title="The live office" text="A little personality for your everyday work. Select an agent or an object to explore." action={<button className="button secondary" onClick={()=>setMotion(!motion)}><Icon name={motion?'Pause':'Play'} size={16}/>{motion?'Pause animation':'Resume animation'}</button>}/><section className="panel full-office"><div className="office-toolbar"><span><i className="live-dot"/>TEAM FLOOR / 01</span><div className="row gap-4"><small>{agents.length} teammates</small><span className="pill subtle">{mode==='demo'?'Demo activity':'Backend state'}</span></div></div><Suspense fallback={<div className="office-loading">Opening your office…</div>}><OfficeCanvas agents={agents} motion={motion} onAgent={a=>onAgent(a.id)} onNavigate={navigate}/></Suspense><div className="office-object-links">{objects.map(([icon,name,page])=><button key={name} onClick={()=>navigate(page)}><Icon name={icon} size={17}/>{name}<Icon name="ArrowUpRight" size={12}/></button>)}</div></section><div className="office-roster">{agents.map(a=><button key={a.id} className="panel" onClick={()=>onAgent(a.id)}><Avatar agent={a} small/><div><strong>{a.name}</strong><small>{a.state.replaceAll('_',' ')}</small></div><Icon name="ChevronRight" size={15}/></button>)}</div><p className="page-footnote">The office reflects workspace state. Movement never starts or completes a task. Up to eight characters are visible; every agent remains available in the roster.</p></>
+export function OfficePage({ onAgent }: { onAgent: (id: string) => void }) {
+  const { agents, navigate } = useWorkspace()
+  const [motion, setMotion] = useState(true)
+  const objects = [
+    ['GitBranch', 'Whiteboard', 'workflows'],
+    ['ListTodo', 'Computers', 'runs'],
+    ['ShieldCheck', 'Meeting room', 'approvals'],
+    ['BookOpen', 'Bookshelf', 'knowledge'],
+    ['Activity', 'Team display', 'usage'],
+    ['Coffee', 'Lounge', 'agents'],
+  ] as const
+  return (
+    <>
+      <PageHeading
+        eyebrow="WELCOME TO YOUR SHARED SPACE"
+        title="The live office"
+        text="A little personality for your everyday work. Select an agent or an object to explore."
+        action={
+          <button className="button secondary" onClick={() => setMotion(!motion)}>
+            <Icon name={motion ? 'Pause' : 'Play'} size={16} />
+            {motion ? 'Pause animation' : 'Resume animation'}
+          </button>
+        }
+      />
+      <section className="panel full-office">
+        <div className="office-toolbar">
+          <span>
+            <i className="live-dot" />
+            TEAM FLOOR / 01
+          </span>
+          <div className="row gap-4">
+            <small>{agents.length} teammates</small>
+            <span className="pill subtle">
+              {mode === 'demo' ? 'Demo activity' : 'Backend state'}
+            </span>
+          </div>
+        </div>
+        <OfficeView
+          agents={agents}
+          motion={motion}
+          onAgent={(a) => onAgent(a.id)}
+          onNavigate={navigate}
+        />
+        <div className="office-object-links">
+          {objects.map(([icon, name, page]) => (
+            <button key={name} onClick={() => navigate(page)}>
+              <Icon name={icon} size={17} />
+              {name}
+              <Icon name="ArrowUpRight" size={12} />
+            </button>
+          ))}
+        </div>
+      </section>
+      <div className="office-roster">
+        {agents.map((a) => (
+          <button key={a.id} className="panel" onClick={() => onAgent(a.id)}>
+            <Avatar agent={a} small />
+            <div>
+              <strong>{a.name}</strong>
+              <small>{a.state.replaceAll('_', ' ')}</small>
+            </div>
+            <Icon name="ChevronRight" size={15} />
+          </button>
+        ))}
+      </div>
+      <p className="page-footnote">
+        The office reflects workspace state. Movement never starts or completes a task. Up to eight
+        characters are visible; every agent remains available in the roster.
+      </p>
+    </>
+  )
 }
