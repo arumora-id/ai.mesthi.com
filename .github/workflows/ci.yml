@@ -1,0 +1,49 @@
+name: Frontend validation
+
+on:
+  push:
+    branches: ['feat/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Source formatting
+        run: npm run format:check
+      - name: TypeScript and production build
+        run: npm run build
+      - name: Domain and C4 contract tests
+        run: npm test
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser flows and screenshots
+        run: npm run test:e2e
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-validation
+          path: |
+            dist/
+            playwright-report/
+            test-results/
+            docs/screenshots/
+            package-lock.json
+          retention-days: 14
