@@ -1,0 +1,85 @@
+name: Frontend validation
+
+on:
+  push:
+    branches: ['feat/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: TypeScript and production build
+        run: npm run build
+      - name: Domain and C4 contract tests
+        run: npm test
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser flows and screenshots
+        run: npm run test:e2e
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-validation
+          path: |
+            dist/
+            playwright-report/
+            test-results/
+            docs/screenshots/
+            package-lock.json
+          retention-days: 14
+      - name: Upload generated review files
+        if: success() && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-review-files
+          path: |
+            package-lock.json
+            docs/screenshots/
+          retention-days: 14
+
+  record-review-files:
+    needs: validate
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feat/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Download validated lockfile and screenshots
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-review-files
+      - name: Commit generated review files to the feature branch
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          FEATURE_BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$EXPECTED_SHA" ]; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json docs/screenshots/
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore: record validated dependency lockfile and UI screenshots"
+          git push origin "HEAD:$FEATURE_BRANCH"
