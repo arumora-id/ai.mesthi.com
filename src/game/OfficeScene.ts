@@ -15,6 +15,7 @@ export class OfficeScene extends Phaser.Scene {
   private blocked = new Set<string>()
   private loaded = false
   private reducedMotion = false
+  private interactionEnabled = true
   private onSelect: (a: Agent) => void
   private onObject: (page: Page) => void
   private stations = [
@@ -54,7 +55,9 @@ export class OfficeScene extends Phaser.Scene {
       .setDepth(50)
     zone.on('pointerover', () => tip.setVisible(true))
     zone.on('pointerout', () => tip.setVisible(false))
-    zone.on('pointerdown', () => this.onObject(page))
+    zone.on('pointerdown', () => {
+      if (this.interactionEnabled && !document.querySelector('dialog[open]')) this.onObject(page)
+    })
     for (let col = Math.floor(x / 30); col <= Math.floor((x + w - 1) / 30); col++)
       for (let row = Math.floor(y / 30); row <= Math.floor((y + h - 1) / 30); row++)
         this.blocked.add(col + ',' + row)
@@ -91,6 +94,7 @@ export class OfficeScene extends Phaser.Scene {
   }
   create() {
     this.loaded = true
+    this.input.enabled = this.interactionEnabled
     this.reducedMotion =
       this.reducedMotion || matchMedia('(prefers-reduced-motion: reduce)').matches
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -260,7 +264,8 @@ export class OfficeScene extends Phaser.Scene {
           .setInteractive({ useHandCursor: true })
         container.on('pointerdown', () => {
           const current = this.people.find((p) => p.id === a.id)
-          if (current) this.onSelect(current)
+          if (current && this.interactionEnabled && !document.querySelector('dialog[open]'))
+            this.onSelect(current)
         })
         w = { container, sprite, label, dot, state: a.state, moving: false }
         this.workers.set(a.id, w)
@@ -335,6 +340,10 @@ export class OfficeScene extends Phaser.Scene {
       }
       move(1)
     }
+  }
+  setInteraction(enabled: boolean) {
+    this.interactionEnabled = enabled
+    if (this.loaded) this.input.enabled = enabled
   }
   setMotion(enabled: boolean) {
     this.reducedMotion = !enabled

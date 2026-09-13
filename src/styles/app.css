@@ -675,7 +675,7 @@ code {
 }
 .overview-hero {
   display: grid;
-  grid-template-columns: 0.84fr 1.16fr;
+  grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
   border: 1px solid #d6dfcb;
   border-radius: 13px;
   overflow: hidden;
@@ -746,6 +746,7 @@ code {
 }
 .hero-office {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   justify-content: center;
   background: #dce5d4;
@@ -791,6 +792,7 @@ code {
 }
 .office-canvas {
   width: 100%;
+  min-width: 0;
   aspect-ratio: 1.6;
   display: block;
   overflow: hidden;

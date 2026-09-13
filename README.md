@@ -2,6 +2,10 @@
 
 Frontend untuk workspace AI: Mission Control, workforce packs, task execution, dan kantor interaktif. React + Vite + TypeScript + Windi CSS, GSAP untuk animasi antarmuka, dan Phaser untuk Live Office.
 
+![Mission Control — demo workspace](docs/screenshots/mission-control.png)
+
+[Live Office](docs/screenshots/live-office.png) · [Content Studio pada ponsel](docs/screenshots/mobile-content.png)
+
 ## Jalankan
 
 Gunakan Node.js 24 (minimum 22.12).

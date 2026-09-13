@@ -53,6 +53,21 @@ export default function OfficeCanvas({
     scene.current?.sync(agents)
   }, [agents])
   useEffect(() => {
+    // Phaser listens at the window level, including clicks on native dialogs above its canvas.
+    const updateInteraction = () => {
+      scene.current?.setInteraction(!document.querySelector('dialog[open]'))
+    }
+    const observer = new MutationObserver(updateInteraction)
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['open'],
+    })
+    updateInteraction()
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => {
     const media = matchMedia('(prefers-reduced-motion: reduce)')
     const update = () => scene.current?.setMotion(motion && !media.matches)
     update()
