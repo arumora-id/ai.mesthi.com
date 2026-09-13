@@ -11,6 +11,24 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('canvas, .fatal-error, .office-fallback')).toBeVisible()
   await expect(page.locator('.fatal-error')).toHaveCount(0)
 })
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus) {
+    console.log('Failed page URL:', page.url())
+    console.log('Visible page state:', await page.locator('body').innerText())
+    console.log(
+      'Heading visibility:',
+      await page.locator('h1').evaluateAll((elements) =>
+        elements.map((element) => ({
+          text: element.textContent,
+          visibility: getComputedStyle(element).visibility,
+          opacity: getComputedStyle(element).opacity,
+          parentStyle: element.parentElement?.getAttribute('style'),
+        })),
+      ),
+    )
+  }
+})
+
 test('mission control and Phaser render without runtime errors', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
