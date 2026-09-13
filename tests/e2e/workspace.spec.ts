@@ -2,8 +2,12 @@ import { expect, test } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 
 test.beforeEach(async({page})=>{
+  page.on('pageerror',error=>console.log('Browser exception:',error.message))
+  page.on('console',message=>{if(message.type()==='error')console.log('Browser console:',message.text())})
   await page.emulateMedia({reducedMotion:'reduce'})
   await page.goto('/')
+  await expect(page.locator('canvas, .fatal-error, .office-fallback')).toBeVisible()
+  await expect(page.locator('.fatal-error')).toHaveCount(0)
 })
 test('mission control and Phaser render without runtime errors',async({page})=>{
   const errors:string[]=[]
