@@ -1,4 +1,13 @@
-import { useEffect, useRef, type ReactNode, type CSSProperties } from 'react'
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useId,
+  useRef,
+  type ReactNode,
+  type CSSProperties,
+} from 'react'
 import {
   Activity,
   ArrowRight,
@@ -127,24 +136,11 @@ export function Avatar({ agent, small = false }: { agent: Agent; small?: boolean
   const style = { '--avatar-color': agent.color } as CSSProperties
   return (
     <span className={'avatar ' + (small ? 'small' : '')} style={style} aria-label={agent.name}>
-      {agent.avatar ? (
-        <span
-          style={{
-            display: 'block',
-            width: 32,
-            height: 32,
-            backgroundImage: 'url(' + agent.avatar.dataUrl + ')',
-            backgroundPosition: '0 0',
-            imageRendering: 'pixelated',
-          }}
-        />
-      ) : (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 3h10v3h3v9h-3v3h-2v3H9v-3H7v-3H4V6h3z" fill="currentColor" />
-          <path d="M7 7h10v7H7z" fill="#f3ebd6" />
-          <path d="M8 9h2v3H8zm6 0h2v3h-2zM9 17h6v4H9z" fill="#263a33" />
-        </svg>
-      )}
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 3h10v3h3v9h-3v3h-2v3H9v-3H7v-3H4V6h3z" fill="currentColor" />
+        <path d="M7 7h10v7H7z" fill="#f3ebd6" />
+        <path d="M8 9h2v3H8zm6 0h2v3h-2zM9 17h6v4H9z" fill="#263a33" />
+      </svg>
     </span>
   )
 }
@@ -153,7 +149,6 @@ export const statusLabel: Record<RunStatus, string> = {
   queued: 'Queued',
   running: 'In progress',
   delivering: 'Delivering',
-  awaiting_approval: 'Needs approval',
   paused: 'Paused',
   completed: 'Completed',
   cancelled: 'Cancelled',
@@ -276,12 +271,25 @@ export function Field({
   children: ReactNode
   hint?: string
 }) {
+  const controlId = useId()
+  const hintId = controlId + '-hint'
   return (
-    <label className="field">
-      <span>{label}</span>
-      {children}
-      {hint && <small>{hint}</small>}
-    </label>
+    <div className="field">
+      <label htmlFor={controlId}>{label}</label>
+      {Children.map(children, (child) =>
+        isValidElement<{ id?: string; 'aria-describedby'?: string }>(child) &&
+        typeof child.type === 'string' &&
+        ['input', 'textarea', 'select'].includes(child.type)
+          ? cloneElement(child, {
+              id: controlId,
+              'aria-describedby':
+                [child.props['aria-describedby'], hint ? hintId : ''].filter(Boolean).join(' ') ||
+                undefined,
+            })
+          : child,
+      )}
+      {hint && <small id={hintId}>{hint}</small>}
+    </div>
   )
 }
 export function downloadText(name: string, text: string) {

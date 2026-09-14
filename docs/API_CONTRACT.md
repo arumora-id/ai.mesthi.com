@@ -1,43 +1,43 @@
-# Kontrak frontend–C4
+# Frontend–C4 API contract
 
-Adapter: `src/core/c4Adapter.ts`. DTO respons divalidasi dengan Zod. Canonical source: [OpenAPI 09fcaccc](https://github.com/arumora-id/api.mesthi.com/blob/09fcaccc449d09456026de90dc2665ddcb5e32ce/openapi/openapi.json).
+Canonical source: [api.mesthi.com commit 09fcaccc](https://github.com/arumora-id/api.mesthi.com/blob/09fcaccc449d09456026de90dc2665ddcb5e32ce/openapi/openapi.json), OpenAPI 3.1.0 / API 1.12.1. The exact snapshot is included as [openapi.c4.json](openapi.c4.json). The API repository currently contains documentation, not runtime implementation.
 
-## Endpoint yang digunakan
+## Implemented requests
 
-| Method | Path                                                 | Kegunaan                                         |
-| ------ | ---------------------------------------------------- | ------------------------------------------------ |
-| GET    | /v1/workspaces                                       | Workspace yang diizinkan                         |
-| POST   | /v1/workspaces                                       | Workspace kosong; tidak mengklaim instalasi pack |
-| GET    | /v1/workspaces/{workspace_id}/agents                 | Agent dalam workspace                            |
-| POST   | /v1/workspaces/{workspace_id}/agents                 | name, role, model_source=mesthi_ai               |
-| GET    | /v1/workspaces/{workspace_id}/tasks                  | TaskRead untuk monitor                           |
-| POST   | /v1/workspaces/{workspace_id}/tasks                  | agent_id, title, instructions, priority=normal   |
-| POST   | /v1/workspaces/{workspace_id}/tasks/{task_id}/queue  | Queue eksplisit                                  |
-| POST   | /v1/workspaces/{workspace_id}/tasks/{task_id}/start  | Start eksplisit                                  |
-| POST   | /v1/workspaces/{workspace_id}/tasks/{task_id}/cancel | Cancel eksplisit                                 |
-| GET    | /v1/workspaces/{workspace_id}/entitlements           | Plan, limits, subscription, credits.available    |
+| Method        | Path                                                 | Use                                                                          |
+| ------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------- |
+| GET           | /v1/me                                               | Verify authenticated access; no client-side role inference                   |
+| GET           | /v1/models                                           | Model suggestions only when a recognized `data: [{id}]` envelope is returned |
+| GET, POST     | /v1/workspaces                                       | List authorized workspaces; create                                           |
+| PATCH, DELETE | /v1/workspaces/{workspace_id}                        | Edit or delete                                                               |
+| GET, POST     | /v1/workspaces/{workspace_id}/agents                 | List or create agents                                                        |
+| PATCH, DELETE | /v1/workspaces/{workspace_id}/agents/{agent_id}      | Edit or delete agents                                                        |
+| GET, POST     | /v1/workspaces/{workspace_id}/tasks                  | List or create tasks                                                         |
+| PATCH, DELETE | /v1/workspaces/{workspace_id}/tasks/{task_id}        | Edit drafts or delete eligible records; backend decides eligibility          |
+| POST          | /v1/workspaces/{workspace_id}/tasks/{task_id}/queue  | Queue explicitly                                                             |
+| POST          | /v1/workspaces/{workspace_id}/tasks/{task_id}/start  | Start actual execution after user confirmation                               |
+| POST          | /v1/workspaces/{workspace_id}/tasks/{task_id}/cancel | Request cancellation                                                         |
+| GET           | /v1/workspaces/{workspace_id}/entitlements           | Actual plan, subscription status, limits, and available credits              |
+| GET           | /v1/billing/plans                                    | Actual plan catalog and prices; no checkout operation                        |
 
-API polling hanya saat tab terlihat dan token tersedia, setiap 15 detik. Setiap request memiliki timeout 15 detik. Refresh yang sudah usang diabaikan setelah request/mutasi baru. Perintah mutasi tidak diulang otomatis. Jika perintah diterima tetapi refresh gagal, UI meminta refresh sebelum pengulangan.
+Responses for workspace, agent, task, entitlements, and plans are validated with Zod. Identifiers are UUIDs. Every agent, task, and entitlement response must match the selected workspace. UI validation is supplementary; backend authorization remains mandatory.
 
-Setiap daftar agent/task diperiksa kecocokan workspace_id. Validasi frontend tidak menggantikan otorisasi tenant di backend.
+Only the active workspace is loaded. The frontend polls every 15 seconds while visible and refreshes on visibility/network restoration. In-flight reads are aborted when replaced; stale responses and responses arriving after logout cannot restore private data.
 
-## Data yang tidak disimpulkan
+## Commands and errors
 
-- Persentase progres TaskRead tidak tersedia; UI menampilkan tanda em dash kecuali completed.
-- TaskSession ID dan bukti delivery tidak tersedia pada TaskRead.
-- Endpoint `POST .../sessions/{task_session_id}/reconcile` ada, tetapi tidak digunakan tanpa sumber task_session_id yang sah.
-- `/v1/sessions` bukan pengganti otomatis TaskSession.
-- Tidak ada endpoint snapshot/command gabungan yang dibuat-buat.
-- Tidak ada fallback ke demo ketika sesi API gagal.
-- Available credits berasal dari entitlements, bukan penghitungan meter lokal.
-- Policy `draft_only` pada view model bukan klaim bahwa backend menerapkan policy produk tersebut. Kontrolnya dinonaktifkan di mode API.
+POST/PATCH/DELETE are never retried automatically, including in nginx. A timeout, network loss, malformed success response, or server failure can leave a command's outcome unknown. The interface blocks new commands until the user explicitly refreshes and reviews server state. This does not provide server-side exactly-once execution: idempotency keys and optimistic concurrency require additional API support.
 
-## Autentikasi
+HTTP 401/403 during workspace loading clears private state. Service failures preserve only a clearly marked, read-only stale view. Known status aliases are mapped explicitly; unknown values are not interpreted as successful completion.
 
-Untuk integrasi awal, bearer token sesi resmi dimasukkan lewat Settings, disimpan hanya dalam memori, dan dikirim ke origin yang sama. HTTP 401 menghapus token memori; HTTP 403 ditampilkan sebagai penolakan izin. Token/credential tidak boleh ditempatkan di variabel `VITE_*`, source, screenshot, atau localStorage.
+`TaskRead` has no progress percentage, TaskSession ID, commit SHA, remote SHA, or delivery evidence. None is fabricated. A task's `result_summary` is plain text returned by the backend, not an object-storage artifact. No arbitrary HTML is rendered.
 
-Reverse proxy perlu mempertahankan Authorization dan menerapkan TLS, otorisasi, serta kebijakan CORS/CSRF sesuai gateway produksi. Adapter memakai `credentials: omit` dan `cache: no-store`.
+Create Task does not queue or start it. Agent system prompts are context, not authorization. BYOK selection assumes the provider credentials were already provisioned server-side; no credential-registration endpoint is invented.
 
-## Fitur yang perlu endpoint baru
+## Authentication contract
 
-Atomic pack installation; agent skill binding/versioning; custom avatars persisten; workflow schedules; knowledge/skills; artifact content/download; generic content approval/publishing; OAuth/MCP configuration; provider media jobs; budget mutation dan metering tambahan. UI demo untuk fitur-fitur itu tidak memanggil endpoint spekulatif.
+The included gateway implements same-origin cookie authentication using OAuth2 Proxy + Redis and forwards the authenticated user's access token as `Authorization: Bearer …` to C4. The frontend uses `credentials: same-origin`, `cache: no-store`, and rejects HTTP redirects on API requests.
+
+The deployed API must accept and verify the selected OIDC provider's access token, including the expected audience and tenant/role mapping. Its OpenAPI only declares HTTP Bearer and does not establish these identity details. If C4 currently accepts a different token format, a verified server-side token exchange or identity integration must be implemented before this gateway can be used. Never replace that integration with a global admin token.
+
+The gateway accepts only the implemented API paths. The existing /v1/sessions API and reconcile endpoint are not mapped to tasks without a verified TaskSession reference. Generic artifacts, skills, schedules, approvals, OAuth/MCP management, media jobs, and payments are outside the current contract.

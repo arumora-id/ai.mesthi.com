@@ -1,5 +1,4 @@
-import { useWorkspace, mode } from '../core/runtime'
-import { usage } from '../core/demo'
+import { useWorkspace } from '../core/runtime'
 import { Avatar, Icon, PageHeading, shortTime } from '../components/ui'
 import { RunTable } from './Runs'
 import OfficeView from '../game/OfficeView'
@@ -12,8 +11,7 @@ export function Overview({
   onOpen: (id: string) => void
   onAgent: (id: string) => void
 }) {
-  const { data, activeId, agents, runs, artifacts, navigate } = useWorkspace(),
-    approvals = runs.filter((r) => r.status === 'awaiting_approval')
+  const { agents, runs, entitlements, navigate, writable } = useWorkspace()
   const metrics = [
     {
       title: 'Active agents',
@@ -26,28 +24,29 @@ export function Overview({
     {
       title: 'Tasks in motion',
       value: runs.filter((r) => ['running', 'delivering'].includes(r.status)).length,
-      detail: 'Ideas becoming outcomes',
+      detail: 'Currently executing or delivering',
       icon: 'Activity',
       color: 'blue',
       page: 'runs' as const,
     },
     {
-      title: 'Needs your eyes',
-      value: mode === 'api' ? null : approvals.length,
-      detail: mode === 'api' ? 'Approval extension needed' : 'Waiting for approval',
-      icon: 'ShieldCheck',
+      title: 'Tasks queued',
+      value: runs.filter((r) => r.status === 'queued').length,
+      detail: 'Ready for the next step',
+      icon: 'Clock3',
       color: 'amber',
-      page: 'approvals' as const,
+      page: 'runs' as const,
     },
     {
-      title: 'Work delivered',
+      title: 'Tasks completed',
       value: runs.filter((r) => r.status === 'completed').length,
-      detail: mode === 'api' ? 'Backend completion status' : artifacts.length + ' outputs ready',
+      detail: 'Completion confirmed by the server',
       icon: 'CheckCheck',
       color: 'purple',
       page: 'artifacts' as const,
     },
   ]
+  const failed = runs.filter((r) => r.status === 'failed')
   return (
     <>
       <PageHeading
@@ -55,8 +54,8 @@ export function Overview({
         title="Mission control"
         text="A clear view of your team, and a little room for your next big idea."
         action={
-          <button className="button primary" onClick={onNew}>
-            <Icon name="Plus" size={17} />
+          <button disabled={!writable} className="button primary" onClick={onNew}>
+            <Icon name="Plus" />
             New task
           </button>
         }
@@ -73,14 +72,14 @@ export function Overview({
             In good company<span>.</span>
           </h2>
           <p>Turn your next “what if” into something real. Your AI team is right here with you.</p>
-          <button className="button ink" onClick={onNew}>
+          <button disabled={!writable} className="button ink" onClick={onNew}>
             Give your team a mission
-            <Icon name="ArrowUpRight" size={17} />
+            <Icon name="ArrowUpRight" />
           </button>
           <div className="hero-team">
             <div className="avatar-stack">
               {agents.slice(0, 4).map((a) => (
-                <Avatar key={a.id} agent={a} small />
+                <Avatar agent={a} key={a.id} small />
               ))}
             </div>
             <span>
@@ -121,9 +120,7 @@ export function Overview({
                 <Icon name={m.icon} size={17} />
               </span>
             </div>
-            <strong data-metric-value={m.value === null ? undefined : m.value}>
-              {m.value === null ? '—' : m.value.toString().padStart(2, '0')}
-            </strong>
+            <strong data-metric-value={m.value}>{m.value.toString().padStart(2, '0')}</strong>
             <small>
               {m.detail}
               <Icon name="ArrowUpRight" size={13} />
@@ -149,31 +146,28 @@ export function Overview({
           <section className="panel attention-panel">
             <div className="panel-heading">
               <h2>A moment of your time</h2>
-              <Icon name="ShieldCheck" size={18} />
+              <Icon name="ShieldCheck" />
             </div>
-            {approvals.length ? (
-              approvals.slice(0, 1).map((r) => (
-                <div className="attention-body" key={r.id}>
-                  <span className="review-label">READY FOR REVIEW</span>
-                  <h3>{r.title}</h3>
-                  <p>Your team has prepared a draft. Take a look before the next step.</p>
-                  <button className="button secondary" onClick={() => onOpen(r.id)}>
-                    Review draft
-                    <Icon name="ArrowUpRight" size={15} />
+            <div className="attention-body">
+              {failed.length ? (
+                <>
+                  <span className="review-label">TASK NEEDS ATTENTION</span>
+                  <h3>{failed[0].title}</h3>
+                  <p>Review the server's error details before attempting further work.</p>
+                  <button className="button secondary" onClick={() => onOpen(failed[0].id)}>
+                    Review task
                   </button>
-                </div>
-              ))
-            ) : (
-              <div className="attention-body">
-                <Icon name="CheckCheck" size={26} />
-                <h3>{mode === 'api' ? 'Your control plane.' : 'All caught up.'}</h3>
-                <p>
-                  {mode === 'api'
-                    ? 'Task status comes from the C4 API. General approvals need a backend extension.'
-                    : 'Your team will let you know when a decision needs you.'}
-                </p>
-              </div>
-            )}
+                </>
+              ) : (
+                <>
+                  <Icon name="CheckCheck" size={26} />
+                  <h3>A clear view of your work.</h3>
+                  <p>
+                    {runs.length ? 'No failed tasks in this workspace.' : 'Create a task to begin.'}
+                  </p>
+                </>
+              )}
+            </div>
           </section>
           <section className="panel pulse-panel">
             <div className="panel-heading">
@@ -182,11 +176,11 @@ export function Overview({
             </div>
             <div className="pulse-list">
               {runs.slice(0, 3).map((r) => (
-                <button onClick={() => onOpen(r.id)} key={r.id}>
+                <button key={r.id} onClick={() => onOpen(r.id)}>
                   <i />
                   <span>
                     <strong>{r.title}</strong>
-                    <small>{r.status.replaceAll('_', ' ') + ' · ' + shortTime(r.updatedAt)}</small>
+                    <small>{r.backendStatus + ' · ' + shortTime(r.updatedAt)}</small>
                   </span>
                 </button>
               ))}
@@ -194,21 +188,13 @@ export function Overview({
             <div className="pulse-footer">
               <Icon name="Coins" size={15} />
               <span>
-                {mode === 'demo'
-                  ? usage(data, activeId) + ' credits used this month'
-                  : 'Billing balance available in Usage'}
+                {entitlements
+                  ? entitlements.availableCredits.toLocaleString() + ' credits available'
+                  : 'Balance unavailable'}
               </span>
             </div>
           </section>
         </aside>
-      </div>
-      <div className="workspace-bottom-note">
-        <Icon name="Sparkles" size={15} />
-        Made for the way you work. Built to grow with your ideas.
-        <button onClick={() => navigate('templates')}>
-          Explore workforce packs
-          <Icon name="ArrowRight" size={13} />
-        </button>
       </div>
     </>
   )

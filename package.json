@@ -1,6 +1,6 @@
 {
   "name": "ai-mesthi-workspace",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,8 +13,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json}\" index.html README.md \"docs/*.md\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json}\" index.html README.md \"docs/*.md\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json}\" index.html README.md \"docs/*.md\" \"scripts/*.mjs\" \"deploy/*.yaml\" \".github/workflows/*.yml\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"*.{ts,json}\" index.html README.md \"docs/*.md\" \"scripts/*.mjs\" \"deploy/*.yaml\" \".github/workflows/*.yml\"",
+    "verify:bundle": "node scripts/verify-bundle.mjs",
+    "check:deployment": "python3 scripts/check_deployment.py",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "5.3.0",

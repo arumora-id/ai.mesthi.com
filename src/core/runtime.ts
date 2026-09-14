@@ -1,140 +1,190 @@
 import { create } from 'zustand'
-import { reduceCommand, seed } from './demo'
-import { executeC4Command, loadC4Snapshot } from './c4Adapter'
-import { pages, snapshotSchema, type Command, type Page, type Snapshot } from './domain'
-export const mode = import.meta.env.VITE_DATA_MODE === 'api' ? 'api' : 'demo'
-const storageKey = 'mesthi:demo:v1'
-const empty: Snapshot = {
-  version: 1,
-  workspaces: [],
-  agents: [],
-  runs: [],
-  workflows: [],
-  artifacts: [],
-  knowledge: [],
-  connections: [],
-  ledger: [],
-}
-function localSnapshot() {
-  try {
-    const raw = localStorage.getItem(storageKey)
-    if (!raw) return { data: seed(), error: '' }
-    const parsed = snapshotSchema.safeParse(JSON.parse(raw))
-    return parsed.success
-      ? { data: parsed.data, error: '' }
-      : { data: seed(), error: 'Saved demo data was incompatible. A fresh demo was loaded.' }
-  } catch {
-    return {
-      data: seed(),
-      error: 'Local storage is unavailable. Changes may not survive a reload.',
-    }
-  }
-}
-let epoch = 0
-const initial = mode === 'demo' ? localSnapshot() : { data: empty, error: '' }
-const initialPage = pages.includes(location.hash.slice(1) as Page)
-  ? (location.hash.slice(1) as Page)
-  : 'overview'
+import {
+  ApiError,
+  executeC4Command,
+  loadC4Snapshot,
+  loadIdentity,
+  loadWorkspaces,
+} from './c4Adapter'
+import { pages, type Command, type Page, type Snapshot, type Workspace } from './domain'
+export const emptySnapshot = (): Snapshot => ({ agents: [], runs: [], entitlements: null })
+type Phase = 'loading' | 'ready' | 'signed-out' | 'forbidden' | 'offline'
 interface Store {
+  workspaces: Workspace[]
   data: Snapshot
   activeId: string
+  accountName: string
   page: Page
+  phase: Phase
   busy: boolean
-  ready: boolean
+  refreshing: boolean
   error: string
   notice: string
+  stale: boolean
+  uncertain: boolean
+  lastSynced: string | null
   navigate: (page: Page) => void
   selectWorkspace: (id: string) => void
   command: (cmd: Command) => Promise<boolean>
-  refresh: () => Promise<void>
+  refresh: (manual?: boolean) => Promise<void>
   notify: (text: string) => void
   clearMessage: () => void
+  clearSession: () => void
+}
+let epoch = 0
+let refreshController: AbortController | undefined
+const initialPage = pages.includes(location.hash.slice(1) as Page)
+  ? (location.hash.slice(1) as Page)
+  : 'overview'
+// Remove obsolete business data. Only appearance preferences persist.
+try {
+  localStorage.removeItem('mesthi:demo:v1')
+} catch {
+  /* Storage is optional. */
 }
 export const useApp = create<Store>((set, get) => ({
-  data: initial.data,
-  activeId: initial.data.workspaces[0]?.id ?? '',
+  workspaces: [],
+  data: emptySnapshot(),
+  activeId: '',
+  accountName: '',
   page: initialPage,
+  phase: 'loading',
   busy: false,
-  ready: mode === 'demo',
-  error: initial.error,
+  refreshing: false,
+  error: '',
   notice: '',
+  stale: true,
+  uncertain: false,
+  lastSynced: null,
   navigate: (page) => {
+    if (!pages.includes(page)) return
     if (location.hash !== '#' + page) history.pushState(null, '', '#' + page)
     set({ page })
   },
   selectWorkspace: (id) => {
-    if (get().data.workspaces.some((w) => w.id === id)) {
-      set({ activeId: id, page: 'overview' })
-      history.pushState(null, '', '#overview')
-    }
-  },
-  notify: (notice) => set({ notice, error: '' }),
-  clearMessage: () => set({ notice: '', error: '' }),
-  command: async (cmd) => {
-    if (get().busy) return false
-    set({ busy: true, error: '' })
+    if (get().busy || id === get().activeId || !get().workspaces.some((w) => w.id === id)) return
     ++epoch
-    let submitted = false
+    refreshController?.abort()
+    set({
+      activeId: id,
+      data: emptySnapshot(),
+      phase: 'loading',
+      stale: true,
+      lastSynced: null,
+      error: '',
+      notice: '',
+      page: 'overview',
+      refreshing: false,
+    })
+    history.pushState(null, '', '#overview')
+    void get().refresh()
+  },
+  notify: (notice) => set({ notice }),
+  clearMessage: () => set({ notice: '', error: '' }),
+  clearSession: () => {
+    ++epoch
+    refreshController?.abort()
+    set({
+      workspaces: [],
+      data: emptySnapshot(),
+      activeId: '',
+      accountName: '',
+      phase: 'signed-out',
+      error: '',
+      notice: '',
+      stale: true,
+      busy: false,
+      refreshing: false,
+      lastSynced: null,
+      uncertain: false,
+    })
+  },
+  refresh: async (manual = false) => {
+    if (get().busy || (get().refreshing && !manual)) return
+    refreshController?.abort()
+    const controller = new AbortController()
+    refreshController = controller
+    const current = ++epoch
+    set({ refreshing: true })
     try {
-      let data: Snapshot
-      const oldIds = new Set(get().data.workspaces.map((w) => w.id))
-      if (mode === 'demo') {
-        data = reduceCommand(get().data, cmd)
-        localStorage.setItem(storageKey, JSON.stringify(data))
-      } else {
-        await executeC4Command(cmd)
-        submitted = true
-        data = snapshotSchema.parse(await loadC4Snapshot())
-      }
-      const nextId =
-        cmd.type === 'create-workspace'
-          ? data.workspaces.find((w) => !oldIds.has(w.id))?.id
-          : undefined
-      set({ data, ...(nextId ? { activeId: nextId, page: 'overview' as Page } : {}) })
-      return true
-    } catch (e) {
+      const accountName = await loadIdentity(controller.signal)
+      const workspaces = await loadWorkspaces(controller.signal)
+      const activeId = workspaces.some((w) => w.id === get().activeId)
+        ? get().activeId
+        : (workspaces[0]?.id ?? '')
+      const data = activeId ? await loadC4Snapshot(activeId, controller.signal) : emptySnapshot()
+      if (epoch !== current) return
       set({
-        error:
-          (submitted
-            ? 'The operation was accepted, but refreshing failed. Refresh before repeating the action. '
-            : '') + (e instanceof Error ? e.message : 'The action could not be completed.'),
+        accountName,
+        workspaces,
+        activeId,
+        data,
+        phase: 'ready',
+        stale: false,
+        error: '',
+        lastSynced: new Date().toISOString(),
+        ...(manual ? { uncertain: false } : {}),
       })
-      return submitted
+    } catch (error) {
+      if (epoch !== current || controller.signal.aborted) return
+      const message = error instanceof Error ? error.message : 'Unable to load your workspace.'
+      if (error instanceof ApiError && [401, 403].includes(error.status)) {
+        get().clearSession()
+        set({ phase: error.status === 401 ? 'signed-out' : 'forbidden', error: message })
+      } else set({ stale: true, phase: get().lastSynced ? 'ready' : 'offline', error: message })
     } finally {
-      set({ busy: false })
+      if (epoch === current) set({ refreshing: false })
     }
   },
-  refresh: async () => {
-    if (mode === 'demo' || get().busy) return
-    const currentEpoch = ++epoch
+  command: async (cmd) => {
+    if (get().busy || get().stale || get().uncertain || get().phase !== 'ready') return false
+    if ('workspaceId' in cmd && cmd.workspaceId !== get().activeId) {
+      set({ error: 'Select this workspace before changing it.' })
+      return false
+    }
+    refreshController?.abort()
+    const current = ++epoch
+    set({ busy: true, refreshing: false, error: '', notice: '' })
     try {
-      const data = snapshotSchema.parse(await loadC4Snapshot())
-      if (epoch !== currentEpoch) return
-      set({
-        data,
-        activeId: data.workspaces.some((w) => w.id === get().activeId)
-          ? get().activeId
-          : (data.workspaces[0]?.id ?? ''),
-        ready: true,
-        error: '',
-      })
-    } catch (e) {
-      if (epoch === currentEpoch)
-        set({ ready: true, error: e instanceof Error ? e.message : 'Unable to load workspace.' })
+      const createdId = await executeC4Command(cmd)
+      if (epoch !== current) return false
+      if (createdId) set({ activeId: createdId, page: 'overview' })
+      set({ busy: false, stale: true })
+      await get().refresh()
+      if (get().stale)
+        set({
+          uncertain: true,
+          error:
+            'The server accepted the operation, but the updated data could not be loaded. Refresh and review the result before repeating it.',
+        })
+      else set({ notice: 'Changes saved by the server.' })
+      return true
+    } catch (error) {
+      if (epoch !== current) return false
+      if (error instanceof ApiError && [401, 403].includes(error.status)) {
+        get().clearSession()
+        set({ phase: error.status === 401 ? 'signed-out' : 'forbidden', error: error.message })
+      } else
+        set({
+          error: error instanceof Error ? error.message : 'The operation could not be completed.',
+          uncertain: error instanceof ApiError && error.uncertain,
+          stale:
+            error instanceof ApiError && (error.uncertain || [404, 409].includes(error.status)),
+        })
+      return false
+    } finally {
+      if (epoch === current) set({ busy: false })
     }
   },
 }))
 export function useWorkspace() {
-  const s = useApp(),
-    { data, activeId } = s
+  const s = useApp()
   return {
     ...s,
-    workspace: data.workspaces.find((w) => w.id === activeId),
-    agents: data.agents.filter((a) => a.workspaceId === activeId),
-    runs: data.runs.filter((r) => r.workspaceId === activeId),
-    workflows: data.workflows.filter((w) => w.workspaceId === activeId),
-    artifacts: data.artifacts.filter((a) => a.workspaceId === activeId),
-    knowledge: data.knowledge.filter((k) => k.workspaceId === activeId),
-    connections: data.connections.filter((c) => c.workspaceId === activeId),
+    workspace: s.workspaces.find((w) => w.id === s.activeId),
+    agents: s.data.agents,
+    runs: s.data.runs,
+    entitlements: s.data.entitlements,
+    writable: s.phase === 'ready' && !s.busy && !s.stale && !s.uncertain,
   }
 }

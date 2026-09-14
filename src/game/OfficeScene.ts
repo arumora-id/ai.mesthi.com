@@ -140,7 +140,7 @@ export class OfficeScene extends Phaser.Scene {
       this.rect(x + 4, y + 6, 14, 2, 0x778974)
       this.rect(x + 4, y + 12, 10, 2, 0x778974)
     }
-    this.furniture(665, 110, 169, 84, 'workflows', 'Whiteboard · Workflows')
+    this.furniture(665, 110, 169, 84, 'content', 'Whiteboard · Content studio')
     this.rect(666, 269, 166, 91, 0xbda381)
     this.rect(662, 258, 166, 91, 0xd6b994)
     this.rect(668, 262, 154, 77, 0xe0c8a4)
@@ -151,7 +151,7 @@ export class OfficeScene extends Phaser.Scene {
     this.rect(704, 290, 31, 23, 0xf7edcf)
     this.rect(754, 282, 31, 23, 0x576e62)
     this.rect(757, 285, 25, 17, 0xa5c2a8)
-    this.furniture(662, 258, 166, 91, 'approvals', 'Meeting table · Approvals')
+    this.furniture(662, 258, 166, 91, 'runs', 'Meeting table · Tasks')
     this.text(684, 397, 'THE THINKING ROOM', 12)
     this.rect(65, 158, 59, 170, 0x977957)
     this.rect(69, 160, 49, 163, 0xc0a57f)
@@ -166,7 +166,7 @@ export class OfficeScene extends Phaser.Scene {
         )
       this.rect(67, 195 + row * 39, 54, 5, 0x997e5c)
     }
-    this.furniture(65, 158, 59, 170, 'knowledge', 'Bookshelf · Knowledge & skills')
+    this.furniture(65, 158, 59, 170, 'artifacts', 'Bookshelf · Task results')
     this.rect(78, 437, 131, 51, 0xc2a684)
     this.rect(75, 433, 131, 45, 0xe1cba9)
     this.rect(83, 436, 36, 34, 0x617c6a)
@@ -189,7 +189,7 @@ export class OfficeScene extends Phaser.Scene {
     this.furniture(675, 458, 111, 52, 'usage', 'Team display · Usage')
     this.rect(851, 459, 44, 73, 0xc1a685)
     this.rect(857, 465, 32, 61, 0x719485)
-    this.furniture(851, 459, 44, 73, 'templates', 'Door · Workforce packs')
+    this.furniture(851, 459, 44, 73, 'agents', 'Door · Your workforce')
     for (const [x, y] of [
       [78, 75],
       [843, 66],
@@ -273,35 +273,9 @@ export class OfficeScene extends Phaser.Scene {
       w.state = a.state
       w.label.setText(a.name)
       w.dot.setFillStyle(
-        a.state === 'working' ? 0xa2cc65 : a.state === 'waiting_approval' ? 0xe1b268 : 0x819c80,
+        a.state === 'working' ? 0xa2cc65 : a.state === 'error' ? 0xe1b268 : 0x819c80,
       )
-      if (a.avatar && w.sprite.texture.key !== 'custom-' + a.id + '-' + a.avatar.version)
-        this.customAvatar(a, w)
     })
-  }
-  private customAvatar(a: Agent, w: Worker) {
-    const avatar = a.avatar!,
-      key = 'custom-' + a.id + '-' + avatar.version
-    if (this.textures.exists(key)) {
-      w.sprite.setTexture(key).setDisplaySize(38, 45)
-      return
-    }
-    const img = new window.Image()
-    img.onload = () => {
-      if (
-        !this.loaded ||
-        !w.sprite.scene ||
-        this.textures.exists(key) ||
-        this.people.find((p) => p.id === a.id)?.avatar?.version !== avatar.version
-      )
-        return
-      this.textures.addSpriteSheet(key, img, {
-        frameWidth: avatar.frameWidth,
-        frameHeight: avatar.frameHeight,
-      })
-      w.sprite.setTexture(key, 0).setDisplaySize(38, 45)
-    }
-    img.src = avatar.dataUrl
   }
   private wander() {
     if (this.reducedMotion) return
