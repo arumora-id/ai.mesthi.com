@@ -33,42 +33,29 @@ export function markUnauthenticated() {
   if (authMode === 'bearer') bearerToken = ''
 }
 
-export function registrationAvailable() {
-  return Boolean(import.meta.env.VITE_AUTH_REGISTER_URL?.trim())
+function currentReturnUrl() {
+  return location.href
 }
 
-function currentRelativeUrl() {
-  const value = location.pathname + location.search + location.hash
-  return value.startsWith('/') ? value : '/'
+function authBaseUrl() {
+  return (import.meta.env.VITE_AUTH_BASE_URL || 'https://auth.mesthi.com').replace(/\/$/, '')
 }
 
-function resolveAuthUrl(configured: string | undefined, fallback: string, returnTo?: string) {
-  const raw = configured?.trim() || fallback
-  const url = new URL(raw, location.origin)
-
-  if (returnTo && url.origin === location.origin && !url.searchParams.has('rd'))
-    url.searchParams.set('rd', returnTo)
-
+function buildAuthUrl(path: string, returnUrl?: string) {
+  const url = new URL(path, authBaseUrl() + '/')
+  if (returnUrl) url.searchParams.set('return_url', returnUrl)
   return url.toString()
 }
 
 export function beginLogin() {
-  location.assign(
-    resolveAuthUrl(import.meta.env.VITE_AUTH_LOGIN_URL, '/oauth2/start', currentRelativeUrl()),
-  )
+  location.assign(buildAuthUrl('/login', currentReturnUrl()))
 }
 
 export function beginRegistration() {
-  const configured = import.meta.env.VITE_AUTH_REGISTER_URL?.trim()
-  if (!configured) {
-    beginLogin()
-    return
-  }
-
-  location.assign(new URL(configured, location.origin).toString())
+  location.assign(buildAuthUrl('/register', currentReturnUrl()))
 }
 
 export function beginLogout() {
   markUnauthenticated()
-  location.assign(resolveAuthUrl(import.meta.env.VITE_AUTH_LOGOUT_URL, '/oauth2/sign_out', '/'))
+  location.assign(buildAuthUrl('/logout', location.origin + '/'))
 }
