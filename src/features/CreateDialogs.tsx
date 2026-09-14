@@ -1,70 +1,43 @@
 import { useState, type FormEvent } from 'react'
-import { packs } from '../core/catalog'
-import { mode, useWorkspace } from '../core/runtime'
-import { Field, Icon, Modal } from '../components/ui'
-export function CreateWorkspace({
-  onClose,
-  selectedPack = 'content',
-}: {
-  onClose: () => void
-  selectedPack?: string
-}) {
-  const { command, busy } = useWorkspace()
+import { useWorkspace } from '../core/runtime'
+import type { Run, TaskInput } from '../core/domain'
+import { Empty, Field, Icon, Modal } from '../components/ui'
+export function CreateWorkspace({ onClose }: { onClose: () => void }) {
+  const { command, writable } = useWorkspace()
   const [name, setName] = useState(''),
-    [pack, setPack] = useState(mode === 'api' ? 'custom' : selectedPack)
+    [description, setDescription] = useState('')
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (await command({ type: 'create-workspace', name, packId: pack })) onClose()
+    if (await command({ type: 'create-workspace', name, description })) onClose()
   }
   return (
     <Modal
-      title="A new space for your ideas"
-      description="Choose a workforce pack. Agents, skills, and workflows come together in one workspace."
+      title="Create a workspace"
+      description="Keep your team's agents and tasks together."
       onClose={onClose}
-      wide
     >
-      <form onSubmit={submit} className="stack gap-5">
+      <form className="stack gap-4" onSubmit={submit}>
         <Field label="Workspace name">
           <input
+            autoFocus
             required
-            maxLength={60}
+            maxLength={120}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. MESTHI Marketing"
-            autoFocus
           />
         </Field>
-        <div className="pack-options">
-          {packs.map((p) => (
-            <button
-              type="button"
-              key={p.id}
-              className={'pack-option ' + (pack === p.id ? 'selected' : '')}
-              disabled={mode === 'api' && p.id !== 'custom'}
-              onClick={() => setPack(p.id)}
-            >
-              <Icon name={p.icon} size={25} />
-              <strong>{p.name}</strong>
-              <small>
-                {p.agents.length
-                  ? p.agents.length + ' agents · ' + p.skills.length + ' skills'
-                  : 'Start with a blank canvas'}
-              </small>
-              {pack === p.id && <Icon name="Check" className="pack-check" />}
-            </button>
-          ))}
-        </div>
-        <p className="inline-note">
-          <Icon name="ShieldCheck" />
-          {mode === 'demo'
-            ? 'Creates a local demo workspace. Public actions are simulated only.'
-            : 'C4 creates an empty workspace. Packs require a backend extension.'}
-        </p>
+        <Field label="Description">
+          <textarea
+            maxLength={2000}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </Field>
         <div className="modal-actions">
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button disabled={busy} className="button primary">
+          <button className="button primary" disabled={!writable || !name.trim()}>
             Create workspace
             <Icon name="ArrowRight" />
           </button>
@@ -75,115 +48,170 @@ export function CreateWorkspace({
 }
 export function CreateRun({
   onClose,
-  workflowId = '',
-  initialTitle = '',
-  initialBrief = '',
+  task,
+  initial,
 }: {
   onClose: () => void
-  workflowId?: string
-  initialTitle?: string
-  initialBrief?: string
+  task?: Run
+  initial?: Partial<TaskInput>
 }) {
-  const { activeId, workflows, agents, command, busy } = useWorkspace()
-  const available =
-    mode === 'api'
-      ? [{ id: 'c4-task', name: 'C4 task', enabled: true }]
-      : workflows.filter((w) => w.enabled)
-  const [title, setTitle] = useState(initialTitle),
-    [brief, setBrief] = useState(initialBrief),
-    [flowId, setFlowId] = useState(workflowId || available[0]?.id || ''),
-    [agentId, setAgentId] = useState(agents[0]?.id || '')
-  const flow = workflows.find((w) => w.id === flowId)
+  const { activeId, agents, command, writable, navigate } = useWorkspace()
+  const available = agents.filter((a) => a.status === 'active')
+  const [values, setValues] = useState<TaskInput>({
+    agent_id: task?.agentId ?? available[0]?.id ?? '',
+    title: task?.title ?? initial?.title ?? '',
+    instructions: task?.brief ?? initial?.instructions ?? '',
+    priority: (task?.priority as TaskInput['priority']) ?? 'normal',
+  })
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (
-      await command({
-        type: 'create-run',
-        workspaceId: activeId,
-        title,
-        brief,
-        workflowId: flowId,
-        agentId,
-      })
+      await command(
+        task
+          ? { type: 'update-run', workspaceId: activeId, runId: task.id, values }
+          : { type: 'create-run', workspaceId: activeId, values },
+      )
     )
       onClose()
   }
   return (
     <Modal
-      title="Give your team a mission"
-      description="Describe the outcome. Your workflow takes care of the steps."
+      title={task ? 'Edit task' : 'Give your team a mission'}
+      description="Save a task, then queue and start it when you are ready."
       onClose={onClose}
     >
-      <form onSubmit={submit} className="stack gap-4">
-        <Field label="Task name">
-          <input
-            required
-            maxLength={140}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Create our September launch campaign"
-            autoFocus
-          />
-        </Field>
-        <Field label="Brief">
-          <textarea
-            required
-            rows={4}
-            maxLength={10000}
-            value={brief}
-            onChange={(e) => setBrief(e.target.value)}
-            placeholder="Include the audience, tone, and desired outcome."
-          />
-        </Field>
-        <div className="form-grid">
-          <Field label="Workflow">
-            <select required value={flowId} onChange={(e) => setFlowId(e.target.value)}>
-              {!available.length && <option value="">No enabled workflows</option>}
-              {available.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
+      {!available.length ? (
+        <Empty
+          title="Add an active agent first"
+          text="An agent needs a model and the right instructions for this task."
+          action={
+            <button
+              className="button primary"
+              onClick={() => {
+                onClose()
+                navigate('agents')
+              }}
+            >
+              Open workforce
+            </button>
+          }
+        />
+      ) : (
+        <form className="stack gap-4" onSubmit={submit}>
+          <Field label="Task title">
+            <input
+              autoFocus
+              required
+              maxLength={200}
+              value={values.title}
+              onChange={(e) => setValues({ ...values, title: e.target.value })}
+            />
           </Field>
-          <Field label="Lead agent">
-            <select required value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              {!agents.length && <option value="">Create an agent first</option>}
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name + ' · ' + a.role}
-                </option>
-              ))}
-            </select>
+          <Field label="Instructions">
+            <textarea
+              rows={7}
+              required
+              maxLength={100000}
+              value={values.instructions}
+              onChange={(e) => setValues({ ...values, instructions: e.target.value })}
+              placeholder="Describe the outcome, constraints, and how the result should be delivered."
+            />
           </Field>
-        </div>
-        {flow && (
-          <div className="run-estimate">
-            <span>
-              <Icon name="Coins" />
-              Estimated {flow.estimatedCredits} credits
-            </span>
-            <span>
-              <Icon name="ShieldCheck" />
-              {flow.requiresApproval ? 'Human approval' : 'Draft output'}
-            </span>
+          <div className="form-grid">
+            <Field label="Assigned agent">
+              <select
+                required
+                value={values.agent_id}
+                onChange={(e) => setValues({ ...values, agent_id: e.target.value })}
+              >
+                <option value="" disabled>
+                  Select an agent
+                </option>
+                {available.map((a) => (
+                  <option value={a.id} key={a.id}>
+                    {a.name} · {a.role}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Priority">
+              <select
+                value={values.priority}
+                onChange={(e) =>
+                  setValues({ ...values, priority: e.target.value as TaskInput['priority'] })
+                }
+              >
+                {['low', 'normal', 'high', 'urgent'].map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+            </Field>
           </div>
-        )}
-        <p className="inline-note">
-          {mode === 'demo'
-            ? 'Demo runs create sample text. They do not call AI, render media, or publish.'
-            : 'Creates a backend Task. Queue and start are separate actions in task details.'}
-        </p>
-        <div className="modal-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button disabled={busy || !agents.length || !available.length} className="button primary">
-            <Icon name="Play" size={15} />
-            {mode === 'demo' ? 'Start demo run' : 'Create task'}
-          </button>
-        </div>
-      </form>
+          <div className="modal-actions">
+            <button type="button" className="button secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              disabled={
+                !writable ||
+                !available.some((a) => a.id === values.agent_id) ||
+                !values.title.trim() ||
+                !values.instructions.trim()
+              }
+              className="button primary"
+            >
+              {task ? 'Save task' : 'Create task'}
+              <Icon name="ArrowRight" />
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  )
+}
+export function ConfirmAction({
+  title,
+  name,
+  description,
+  onConfirm,
+  onClose,
+  destructive = false,
+}: {
+  title: string
+  name: string
+  description: string
+  onConfirm: () => Promise<void>
+  onClose: () => void
+  destructive?: boolean
+}) {
+  const { writable } = useWorkspace()
+  const [confirmation, setConfirmation] = useState('')
+  return (
+    <Modal title={title} description={description} onClose={onClose}>
+      <p>
+        <strong>{name}</strong>
+      </p>
+      {destructive && (
+        <Field label="Type the name to confirm">
+          <input
+            autoComplete="off"
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+          />
+        </Field>
+      )}
+      <div className="modal-actions">
+        <button className="button secondary" onClick={onClose}>
+          Back
+        </button>
+        <button
+          className="button primary"
+          disabled={!writable || (destructive && confirmation !== name)}
+          onClick={() => void onConfirm()}
+        >
+          {title}
+        </button>
+      </div>
     </Modal>
   )
 }

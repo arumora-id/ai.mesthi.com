@@ -2,7 +2,7 @@ name: Frontend validation
 
 on:
   push:
-    branches: ['feat/**']
+    branches: [main, 'feat/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -29,8 +29,20 @@ jobs:
         run: npm run format:check
       - name: TypeScript and production build
         run: npm run build
+      - name: Production bundle guard
+        run: npm run verify:bundle
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Test typechecking
+        run: npm run typecheck:tests
       - name: Domain and C4 contract tests
         run: npm test
+      - name: Install nginx for gateway validation
+        run: sudo apt-get update && sudo apt-get install -y nginx
+      - name: Gateway and deployment tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Build production container
+        run: docker build -t mesthi-frontend:ci .
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Browser flows and screenshots

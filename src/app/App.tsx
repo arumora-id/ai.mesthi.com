@@ -1,16 +1,15 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePageMotion } from './useMotion'
-import { useApp, useWorkspace, mode } from '../core/runtime'
-import { hasAccessToken } from '../core/c4Adapter'
-import { usage, reserved } from '../core/demo'
+import { useApp, useWorkspace } from '../core/runtime'
 import { pages, type Page } from '../core/domain'
+import { signInUrl, signOutUrl } from '../core/config'
 import { Empty, Icon, Logo, Modal } from '../components/ui'
 import { Overview } from '../features/Overview'
 import { AgentsPage, AgentDetail } from '../features/Agents'
-import { RunsPage, RunDetail, ApprovalsPage } from '../features/Runs'
-import { OfficePage, TemplatesPage, WorkflowsPage } from '../features/Workflows'
+import { RunsPage, RunDetail } from '../features/Runs'
+import { OfficePage } from '../features/Workflows'
 import { CreateRun, CreateWorkspace } from '../features/CreateDialogs'
-import { ArtifactsPage, ConnectionsPage, KnowledgePage } from '../features/LibraryPages'
+import { ArtifactsPage } from '../features/LibraryPages'
 import { ContentStudio } from '../features/ContentStudio'
 import { SettingsPage, UsagePage } from '../features/Settings'
 const navigation: { label: string; items: { page: Page; label: string; icon: string }[] }[] = [
@@ -20,7 +19,6 @@ const navigation: { label: string; items: { page: Page; label: string; icon: str
       { page: 'overview', label: 'Mission control', icon: 'LayoutDashboard' },
       { page: 'runs', label: 'Tasks & runs', icon: 'ListTodo' },
       { page: 'agents', label: 'Your workforce', icon: 'Bot' },
-      { page: 'workflows', label: 'Workflows', icon: 'GitBranch' },
       { page: 'office', label: 'Live office', icon: 'Coffee' },
     ],
   },
@@ -28,16 +26,12 @@ const navigation: { label: string; items: { page: Page; label: string; icon: str
     label: 'CREATE & COLLECT',
     items: [
       { page: 'content', label: 'Content studio', icon: 'Clapperboard' },
-      { page: 'artifacts', label: 'Outputs', icon: 'FolderOpen' },
-      { page: 'knowledge', label: 'Knowledge & skills', icon: 'BookOpen' },
-      { page: 'templates', label: 'Workforce packs', icon: 'Layers' },
+      { page: 'artifacts', label: 'Task results', icon: 'FolderOpen' },
     ],
   },
   {
     label: 'MANAGE',
     items: [
-      { page: 'approvals', label: 'Approvals', icon: 'ShieldCheck' },
-      { page: 'connections', label: 'Connections', icon: 'Plug' },
       { page: 'usage', label: 'Usage & billing', icon: 'Coins' },
       { page: 'settings', label: 'Settings', icon: 'Settings2' },
     ],
@@ -54,7 +48,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
       <main className="fatal-error">
         <Logo />
         <h1>Let's reopen your workspace.</h1>
-        <p>The interface encountered an unexpected error. Your saved demo data has been kept.</p>
+        <p>
+          The interface encountered an unexpected error. Reload to retrieve the latest server state.
+        </p>
         <button className="button primary" onClick={() => location.reload()}>
           Reload workspace
         </button>
@@ -66,20 +62,28 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
 }
 function WorkspaceApp() {
   const {
-    data,
+    workspaces,
     workspace,
+    entitlements,
     activeId,
+    accountName,
     agents,
     runs,
     page,
     navigate,
     selectWorkspace,
-    command,
     refresh,
-    ready,
+    phase,
+    busy,
+    refreshing,
+    stale,
+    uncertain,
+    lastSynced,
+    writable,
     error,
     notice,
     clearMessage,
+    clearSession,
   } = useWorkspace()
   const [mobileOpen, setMobileOpen] = useState(false),
     [newWorkspace, setNewWorkspace] = useState(false),
@@ -87,8 +91,7 @@ function WorkspaceApp() {
     [runId, setRunId] = useState(''),
     [agentId, setAgentId] = useState(''),
     [search, setSearch] = useState(false),
-    [query, setQuery] = useState(''),
-    [help, setHelp] = useState(false)
+    [query, setQuery] = useState('')
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem('mesthi:theme') === 'dark' ? 'dark' : 'light'
@@ -97,21 +100,20 @@ function WorkspaceApp() {
     }
   })
   const mainRef = useRef<HTMLElement>(null)
-  usePageMotion(mainRef, page + '-' + activeId + '-' + ready)
-  const approvals = runs.filter((r) => r.status === 'awaiting_approval').length,
-    title = navItems.find((n) => n.page === page)?.label ?? 'Workspace'
+  const title = navItems.find((n) => n.page === page)?.label ?? 'Workspace'
+  usePageMotion(mainRef, page + '-' + activeId + '-' + phase)
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     try {
       localStorage.setItem('mesthi:theme', theme)
     } catch {
-      /* Appearance can remain session-only. */
+      /* Appearance is optional. */
     }
   }, [theme])
   useEffect(() => {
     const handler = () => {
-      const p = location.hash.slice(1)
-      if (pages.includes(p as Page)) useApp.setState({ page: p as Page })
+      const p = location.hash.slice(1) as Page
+      if (pages.includes(p)) useApp.setState({ page: p })
     }
     window.addEventListener('hashchange', handler)
     return () => window.removeEventListener('hashchange', handler)
@@ -122,57 +124,117 @@ function WorkspaceApp() {
     window.scrollTo({ top: 0 })
     setRunId('')
     setAgentId('')
+    setNewRun(false)
   }, [page, activeId, title])
   useEffect(() => {
-    if (mode === 'api' && hasAccessToken()) void refresh()
-    const timer = window.setInterval(
-      () => {
-        if (document.hidden) return
-        if (mode === 'demo') {
-          if (useApp.getState().data.runs.some((r) => r.status === 'running'))
-            void command({ type: 'tick' })
-        } else if (hasAccessToken()) void refresh()
-      },
-      mode === 'demo' ? 4500 : 15000,
-    )
-    return () => window.clearInterval(timer)
-  }, [command, refresh])
+    void refresh()
+    const sync = () => {
+      if (!document.hidden && !['signed-out', 'forbidden'].includes(useApp.getState().phase))
+        void refresh()
+    }
+    const timer = window.setInterval(sync, 15000)
+    window.addEventListener('online', sync)
+    document.addEventListener('visibilitychange', sync)
+    const logout = (e: StorageEvent) => {
+      if (e.key === 'mesthi:signout') clearSession()
+    }
+    window.addEventListener('storage', logout)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('online', sync)
+      document.removeEventListener('visibilitychange', sync)
+      window.removeEventListener('storage', logout)
+    }
+  }, [refresh, clearSession])
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        setSearch((s) => !s)
+        if (useApp.getState().phase === 'ready') setSearch((s) => !s)
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
   useEffect(() => {
-    if (!notice) return
-    const timer = window.setTimeout(clearMessage, 6500)
-    return () => window.clearTimeout(timer)
+    if (notice) {
+      const timer = setTimeout(clearMessage, 6500)
+      return () => clearTimeout(timer)
+    }
   }, [notice, clearMessage])
+  function logout() {
+    clearSession()
+    try {
+      localStorage.setItem('mesthi:signout', String(Date.now()))
+    } catch {
+      /* The server session still expires. */
+    }
+    location.assign(signOutUrl)
+  }
+  if (phase !== 'ready' && phase !== 'loading')
+    return (
+      <main className="auth-page">
+        <section className="panel auth-card">
+          <Logo />
+          <span className="eyebrow">YOUR WORK, CONNECTED</span>
+          <h1>
+            {phase === 'signed-out'
+              ? 'Welcome to your workspace.'
+              : phase === 'forbidden'
+                ? 'Workspace access is restricted.'
+                : 'We could not connect.'}
+          </h1>
+          <p>
+            {error || 'Sign in with your organization account to access your agents and tasks.'}
+          </p>
+          <div className="row gap-3">
+            <a className="button primary" href={signInUrl}>
+              Sign in
+              <Icon name="ArrowRight" />
+            </a>
+            <button
+              className="button secondary"
+              disabled={refreshing}
+              onClick={() => void refresh(true)}
+            >
+              {refreshing ? 'Connecting…' : 'Try again'}
+            </button>
+            {phase === 'forbidden' && (
+              <button className="text-button" onClick={logout}>
+                Sign out
+              </button>
+            )}
+          </div>
+          <small>Your workspace data is loaded from your account after authentication.</small>
+        </section>
+      </main>
+    )
   const newTask = () => {
     clearMessage()
     setNewRun(true)
   }
   function content() {
-    if (!workspace && !['templates', 'settings'].includes(page))
+    if (page === 'settings')
+      return (
+        <SettingsPage
+          theme={theme}
+          onTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          onLogout={logout}
+        />
+      )
+    if (!workspace)
       return (
         <Empty
-          title={mode === 'api' ? 'Connect your C4 workspace' : 'Make room for something great'}
-          text={
-            mode === 'api'
-              ? 'Connect an authorized API session in Settings. The backend remains the source of truth for execution and permissions.'
-              : 'Create a workspace to get started.'
-          }
+          title="Make room for your next idea"
+          text="Create your first workspace, add an agent, and give it a task."
           action={
             <button
               className="button primary"
-              onClick={() => (mode === 'api' ? navigate('settings') : setNewWorkspace(true))}
+              disabled={!writable}
+              onClick={() => setNewWorkspace(true)}
             >
-              {mode === 'api' ? 'Open settings' : 'Create workspace'}
-              <Icon name="ArrowRight" />
+              Create workspace
+              <Icon name="Plus" />
             </button>
           }
         />
@@ -184,37 +246,16 @@ function WorkspaceApp() {
         return <RunsPage onNew={newTask} onOpen={setRunId} />
       case 'agents':
         return <AgentsPage onAgent={setAgentId} />
-      case 'workflows':
-        return <WorkflowsPage />
       case 'office':
         return <OfficePage onAgent={setAgentId} />
-      case 'templates':
-        return <TemplatesPage />
       case 'content':
         return <ContentStudio />
       case 'artifacts':
-        return <ArtifactsPage />
-      case 'approvals':
-        return <ApprovalsPage onOpen={setRunId} />
-      case 'knowledge':
-        return <KnowledgePage />
-      case 'connections':
-        return <ConnectionsPage />
+        return <ArtifactsPage onOpen={setRunId} />
       case 'usage':
         return <UsagePage />
-      case 'settings':
-        return (
-          <SettingsPage
-            theme={theme}
-            onTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-          />
-        )
     }
   }
-  const used = usage(data, activeId),
-    available =
-      workspace?.entitlements?.availableCredits ??
-      Math.max(0, (workspace?.monthlyBudget ?? 0) - used - reserved(data, activeId))
   return (
     <>
       <a className="skip-link" href="#main-content">
@@ -237,17 +278,18 @@ function WorkspaceApp() {
         </button>
         <div className="workspace-picker">
           <span className="workspace-mark">
-            <Icon name={workspace?.icon ?? 'Layers'} size={19} />
+            <Icon name="Layers" size={19} />
           </span>
           <label>
             <span>YOUR WORKSPACE</span>
             <select
               aria-label="Switch workspace"
               value={activeId}
+              disabled={busy || phase === 'loading'}
               onChange={(e) => selectWorkspace(e.target.value)}
             >
-              {!data.workspaces.length && <option value="">Connect workspace</option>}
-              {data.workspaces.map((w) => (
+              {!workspaces.length && <option value="">No workspace yet</option>}
+              {workspaces.map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}
                 </option>
@@ -257,6 +299,7 @@ function WorkspaceApp() {
           <button
             className="icon-button"
             aria-label="Create workspace"
+            disabled={!writable}
             onClick={() => {
               clearMessage()
               setNewWorkspace(true)
@@ -279,10 +322,6 @@ function WorkspaceApp() {
                   <Icon name={n.icon} size={18} />
                   <span>{n.label}</span>
                   {n.page === 'office' && <i className="nav-live" />}
-                  {n.page === 'approvals' && approvals > 0 && (
-                    <span className="nav-count">{approvals}</span>
-                  )}
-                  {n.page === 'templates' && <span className="nav-new">NEW</span>}
                 </button>
               ))}
             </div>
@@ -298,24 +337,15 @@ function WorkspaceApp() {
               <Icon name="ArrowUpRight" size={13} />
             </div>
             <strong>
-              {workspace ? available.toLocaleString() : '—'}
-              <small>{mode === 'demo' ? 'demo balance' : 'available'}</small>
+              {entitlements?.availableCredits.toLocaleString() ?? '—'}
+              <small>available</small>
             </strong>
-            <div>
-              <i
-                style={{
-                  width:
-                    Math.min(100, (available / Math.max(workspace?.monthlyBudget ?? 1, 1)) * 100) +
-                    '%',
-                }}
-              />
-            </div>
           </button>
           <button className="profile-button" onClick={() => navigate('settings')}>
             <span>M</span>
             <div>
-              <strong>MESTHI workspace</strong>
-              <small>{mode === 'demo' ? 'Personal · Demo mode' : 'C4 API mode'}</small>
+              <strong>{accountName || 'Your account'}</strong>
+              <small>{entitlements?.plan.name ?? 'Workspace settings'}</small>
             </div>
             <Icon name="Settings2" size={16} />
           </button>
@@ -336,9 +366,9 @@ function WorkspaceApp() {
             <strong>{title}</strong>
           </div>
           <div className="topbar-actions">
-            <span className="mode-badge">
+            <span className={'mode-badge ' + (stale ? 'is-stale' : '')}>
               <i />
-              {mode === 'demo' ? 'Demo workspace' : 'C4 API'}
+              {stale ? 'Sync needed' : 'Connected'}
             </span>
             <button
               className="command-button"
@@ -352,7 +382,6 @@ function WorkspaceApp() {
               <span>Search anything</span>
               <kbd>⌘ K</kbd>
             </button>
-            <span className="topbar-divider" />
             <button
               className="icon-button theme-button"
               aria-label="Toggle color theme"
@@ -361,27 +390,29 @@ function WorkspaceApp() {
               <Icon name={theme === 'light' ? 'Moon' : 'Sun'} size={18} />
             </button>
             <button
-              className="icon-button notification-button"
-              aria-label={approvals + ' pending approvals'}
-              onClick={() => navigate('approvals')}
+              className="button secondary compact"
+              disabled={refreshing || busy}
+              onClick={() => void refresh(true)}
             >
-              <Icon name="Bell" size={18} />
-              {approvals > 0 && <i />}
-            </button>
-            <button
-              className="help-button"
-              aria-label="Workspace help"
-              onClick={() => setHelp(true)}
-            >
-              <Icon name="CircleHelp" size={19} />
+              {refreshing ? 'Syncing…' : 'Refresh'}
             </button>
           </div>
         </header>
         <main ref={mainRef} id="main-content" className="main-content" tabIndex={-1}>
-          {!ready && mode === 'api' && hasAccessToken() ? (
+          {(stale || uncertain) && phase === 'ready' && (
+            <div className="sync-banner" role="alert">
+              <Icon name="CircleHelp" />
+              <span>
+                {uncertain
+                  ? 'An operation needs confirmation. Refresh and review the server state before continuing.'
+                  : 'This view may be out of date. Refresh before making changes.'}
+              </span>
+            </div>
+          )}
+          {phase === 'loading' ? (
             <div className="loading-page">
               <Icon name="Loader2" className="spin" size={28} />
-              Connecting your workspace…
+              Loading your workspace…
             </div>
           ) : (
             <div key={activeId + '-' + page} className="page-enter">
@@ -392,10 +423,9 @@ function WorkspaceApp() {
         <footer className="app-footer">
           <span>MESTHI / A SPACE FOR POSSIBILITY</span>
           <span>
-            <i className="live-dot" />
-            {mode === 'demo'
-              ? 'Demo data · No external execution'
-              : 'Mesthi control plane · C4 API'}
+            {lastSynced
+              ? 'Last synced ' + new Date(lastSynced).toLocaleTimeString()
+              : 'Connecting to your workspace'}
           </span>
         </footer>
       </div>
@@ -408,10 +438,10 @@ function WorkspaceApp() {
           </button>
         </div>
       )}
-      {newWorkspace && <CreateWorkspace onClose={() => setNewWorkspace(false)} />}{' '}
-      {newRun && workspace && <CreateRun key={activeId} onClose={() => setNewRun(false)} />}{' '}
-      {runId && <RunDetail runId={runId} onClose={() => setRunId('')} />}{' '}
-      {agentId && <AgentDetail agentId={agentId} onClose={() => setAgentId('')} />}{' '}
+      {newWorkspace && <CreateWorkspace onClose={() => setNewWorkspace(false)} />}
+      {newRun && workspace && <CreateRun key={activeId} onClose={() => setNewRun(false)} />}
+      {runId && <RunDetail runId={runId} onClose={() => setRunId('')} />}
+      {agentId && <AgentDetail agentId={agentId} onClose={() => setAgentId('')} />}
       {search && (
         <Modal title="Find your next step" onClose={() => setSearch(false)}>
           <div className="search-field command-search">
@@ -473,38 +503,6 @@ function WorkspaceApp() {
                     <small>Task</small>
                   </button>
                 ))}
-          </div>
-        </Modal>
-      )}{' '}
-      {help && (
-        <Modal title="A workspace for your AI workforce" onClose={() => setHelp(false)}>
-          <div className="detail-section">
-            <p>
-              Start with a workforce pack, give your team a task, and follow progress in Mission
-              Control. Explore teammates in Live Office, shape stories in Content Studio, and review
-              drafts in Approvals.
-            </p>
-            <p>
-              {mode === 'demo'
-                ? 'Sample data and local simulation. Inference, rendering, payments, and external delivery are not connected.'
-                : 'C4 owns execution. Capabilities outside the verified API need backend extensions.'}
-            </p>
-            <p>
-              <a
-                href="https://github.com/arumora-id/ai.mesthi.com"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Read the setup and architecture documentation
-                <Icon name="ExternalLink" size={14} />
-              </a>
-            </p>
-          </div>
-          <div className="modal-actions">
-            <button className="button primary" onClick={() => setHelp(false)}>
-              Make yourself at home
-              <Icon name="ArrowRight" />
-            </button>
           </div>
         </Modal>
       )}

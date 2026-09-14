@@ -1,70 +1,54 @@
 # MESTHI · AI workspace
 
-Frontend untuk workspace AI: Mission Control, workforce packs, task execution, dan kantor interaktif. React + Vite + TypeScript + Windi CSS, GSAP untuk animasi antarmuka, dan Phaser untuk Live Office.
+React + Vite + TypeScript + Windi CSS, with GSAP interface animation and a Phaser Live Office. All business operations use the Mesthi control-plane API. The application contains no demo engine, seeded workspace, simulated execution, local credit ledger, or local business-data persistence.
 
-![Mission Control — demo workspace](docs/screenshots/mission-control.png)
+This release prepares the frontend and authentication gateway for production configuration. It is **not an end-to-end production certification**: real identity-provider compatibility, tenant isolation, infrastructure, and task delivery must pass the staging acceptance checks in [Production readiness](docs/PRODUCTION_READINESS.md).
 
-[Live Office](docs/screenshots/live-office.png) · [Content Studio pada ponsel](docs/screenshots/mobile-content.png)
+## Run and verify
 
-## Jalankan
-
-Gunakan Node.js 24 (minimum 22.12).
+Use Node.js 24 and Python 3.11+ for deployment checks.
 
 ```sh
 npm ci
-cp .env.example .env.local
 npm run dev
 ```
 
-Mode awal adalah **demo**. Data disimpan di browser dan dibatasi per workspace. Simulasi tidak memanggil model, merender video, memublikasikan konten, menghubungkan akun, atau melakukan pembayaran.
+An authenticated same-origin gateway at `/api` is required. Without it, the application shows an authentication or connection error. Vite development and preview servers are not production authentication gateways.
 
 ```sh
-npm run typecheck
-npm test
+npm run format:check
 npm run build
-npx playwright install chromium
+npm run verify:bundle
+npm test
+npx playwright install --with-deps chromium
 npm run test:e2e
-npm run preview
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-CI menjalankan build produksi, pengujian domain/API, dan pengujian browser Chromium. Lockfile disertakan dalam repository. Hasil build, laporan browser, dan tangkapan layar tersedia sebagai artifact workflow Frontend validation.
+Browser and unit tests use isolated fixtures under `tests/`. Fixtures are never imported by the application or included in the production bundle. Gateway tests need nginx, installed by CI. Test fixtures are not evidence of successful execution against the deployed backend.
 
-## Yang tersedia
+## Real operations
 
-- Mission Control, daftar/board task, detail aktivitas dan status delivery.
-- Workspace terpisah; Content Studio, Software Team, Research Team, atau workspace kosong.
-- Agent, konfigurasi demo, custom markdown skills, reference documents, dan preview/download outputs.
-- Workflow templates, anggaran dan reservasi kredit demo, approval manusia, serta pause/resume/cancel.
-- Content Studio untuk menyusun brief dan storyboard; output contoh ditandai sebagai demo.
-- Kantor Phaser dengan karakter pixel, objek interaktif, pathfinding, dan roster yang dapat diakses melalui keyboard.
-- GSAP page entry, stagger kartu/daftar, scroll reveal, counters, dan modal. Reduced motion dihormati dan efek dibersihkan saat navigasi.
-- Tampilan responsif, tema terang/gelap, pencarian Cmd/Ctrl K, serta dialog native dengan fokus dan Escape.
+- Authenticated workspace listing, creation, editing, and deletion.
+- Agent creation, editing, disabling, deletion, model source/ID, system instructions, and optional repository configuration.
+- Task creation, editing, deletion, explicit queue/start/cancel, server status and error details.
+- Content briefs submitted as ordinary tasks to a configured agent.
+- Task result summaries returned by the backend, displayed as text and downloadable as Markdown.
+- Subscription, credit balance, plan limits, and plan prices from the API.
+- Live Office derived from agent/task state, search, responsive layout, light/dark appearance, and reduced-motion support.
+- Session expiry clears private data; workspace changes clear the previous view immediately; uncertain mutation responses block further changes until explicit refresh and review.
 
-## Hubungkan ke C4
+File uploads, persistent custom sprites, skills, atomic workforce packs, workflow schedules, generic approvals, provider media rendering, external publishing, and self-service checkout are not exposed as working product features. Their required backend services are specified in the readiness document.
 
-```dotenv
-VITE_DATA_MODE=api
-VITE_API_BASE_URL=/api
-```
+## Authentication and deployment
 
-Build ulang setelah mengganti variabel Vite. Atur reverse proxy **same origin** dari `/api` menuju control plane. Buka Settings untuk memasukkan bearer token sesi yang sudah diterbitkan oleh sistem autentikasi Anda. Token hanya disimpan dalam memori, hilang saat reload, dan tidak dimasukkan ke bundle maupun localStorage.
+Browser → existing HTTPS nginx → frontend gateway → C4 API. OAuth2 Proxy performs OIDC login; Redis stores server-side sessions. The gateway forwards the user's access token to the API after authentication. The browser never receives a bearer-token input and never stores provider credentials.
 
-Mode API memulai state kosong dan hanya memakai endpoint C4 yang sudah diperiksa: workspace, agent, task, queue/start/cancel, dan entitlements. Kegagalan API ditampilkan sebagai error; tidak digantikan oleh data demo.
+The API must validate the chosen issuer, audience, subject, tenant membership, and roles. No shared admin token or implicit tenant impersonation is introduced.
 
-Autentikasi login/refresh produksi masih memerlukan integrasi identity gateway. Token manual adalah fasilitas integrasi awal untuk operator yang berwenang.
+- [Deployment configuration and commands](docs/DEPLOYMENT.md)
+- [Required configuration and release blockers](docs/PRODUCTION_READINESS.md)
+- [Verified API contract](docs/API_CONTRACT.md)
+- [C4 alignment](docs/C4_ALIGNMENT.md)
 
-## Arsitektur dan batas integrasi
-
-[Keselarasan C4](docs/C4_ALIGNMENT.md) memetakan konsep produk ke batas runtime yang sudah ada. [Kontrak API](docs/API_CONTRACT.md) menjelaskan endpoint yang digunakan dan fitur yang memerlukan ekstensi backend. [Deployment](docs/DEPLOYMENT.md) menjelaskan hosting statis dan reverse proxy.
-
-Frontend ini tidak menjalankan Hermes, gVisor, Git Broker, Git Finalizer, atau scheduler. Live Office memvisualisasikan state; pergerakan karakter tidak memulai atau menyelesaikan task. Worktree tetap detail eksekusi untuk pekerjaan kode.
-
-Sumber implementasi adalah arsip konsep produk yang tersedia, README arsitektur backend, dan OpenAPI canonical pada commit [09fcaccc](https://github.com/arumora-id/api.mesthi.com/tree/09fcaccc449d09456026de90dc2665ddcb5e32ce). Tautan percakapan ChatGPT privat tidak dapat dibaca seluruhnya secara langsung; dokumentasi ini tidak mengklaim audit lengkap atas kedua percakapan.
-
-## Status produk
-
-Ini adalah MVP frontend dengan demo yang dapat digunakan dan adapter C4 terbatas pada kontrak terverifikasi. General approval/publishing, provider video/audio/image, OAuth/MCP, server-side skills, atomic pack installation, generic artifact storage, scheduler, dan metering baru memerlukan pekerjaan backend.
-
-Free/Pro dan angka harga yang tampil adalah proposal produk. Tidak ada checkout atau penagihan aktif. Preferensi jadwal demo tidak menjalankan pekerjaan di latar belakang.
-
-Windi CSS digunakan sesuai permintaan. Karena proyek upstream berada dalam masa sunsetting, dependensinya dipin dan kompatibilitas build diperiksa di CI; migrasi CSS di masa depan adalah keputusan terpisah.
+Windi CSS remains as requested; its upstream sunsetting makes ongoing build compatibility checks necessary. Dependencies are locked. GSAP and Phaser animation never alter execution state.

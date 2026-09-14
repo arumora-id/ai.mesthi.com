@@ -1,150 +1,169 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  ApiError,
   c4Request,
   executeC4Command,
-  hasAccessToken,
   loadC4Snapshot,
+  loadModels,
+  loadPlans,
   mapTaskStatus,
-  setAccessToken,
 } from '../src/core/c4Adapter'
-const ws = {
-  id: 'workspace-1',
-  name: 'C4 workspace',
-  description: null,
-  created_at: '2026-09-13T00:00:00Z',
-  updated_at: '2026-09-13T00:00:00Z',
+import { apiBase } from '../src/core/config'
+import {
+  agent,
+  agentId,
+  agentValues,
+  entitlement,
+  plan,
+  secondWorkspaceId,
+  task,
+  taskId,
+  taskValues,
+  workspaceId,
+} from './fixtures/c4'
+import contract from '../docs/openapi.c4.json'
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+beforeEach(() => vi.stubGlobal('fetch', vi.fn()))
+afterEach(() => vi.unstubAllGlobals())
+function snapshotResponses(values = { agents: [agent], tasks: [task], entitlements: entitlement }) {
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input)
+    return json(
+      url.endsWith('/agents')
+        ? values.agents
+        : url.endsWith('/tasks')
+          ? values.tasks
+          : values.entitlements,
+    )
+  })
 }
-const agent = {
-  id: 'agent-1',
-  workspace_id: ws.id,
-  name: 'Engineer',
-  role: 'software',
-  status: 'active',
-  model_source: 'mesthi_ai',
-  model_id: null,
-}
-const task = {
-  id: 'task-1',
-  workspace_id: ws.id,
-  agent_id: agent.id,
-  title: 'Deliver change',
-  instructions: 'A backend task',
-  status: 'delivering',
-  branch_name: 'task/example',
-  result_summary: null,
-  error_message: null,
-  created_at: ws.created_at,
-  updated_at: ws.updated_at,
-}
-const entitlement = {
-  plan: {
-    name: 'Free',
-    limits: {
-      max_agents: 5,
-      max_parallel_tasks: 2,
-      max_active_worktrees: 2,
-      monthly_llm_credits: 1000,
-    },
-  },
-  subscription: { status: 'active' },
-  credits: { available: 850 },
-}
-function mockSnapshot(taskOverride = {}) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: URL) => {
-      const path = input.pathname
-      const payload = path.endsWith('/workspaces')
-        ? [ws]
-        : path.endsWith('/agents')
-          ? [agent]
-          : path.endsWith('/tasks')
-            ? [{ ...task, ...taskOverride }]
-            : entitlement
-      return new Response(JSON.stringify(payload), {
-        headers: { 'content-type': 'application/json' },
-      })
-    }),
-  )
-}
-beforeEach(() => {
-  vi.stubGlobal('location', { origin: 'https://app.example' })
-  setAccessToken('test-token')
-})
-afterEach(() => {
-  setAccessToken('')
-  vi.unstubAllGlobals()
-  vi.unstubAllEnvs()
-})
-describe('C4 API boundary', () => {
-  it('keeps delivery distinct from completion and unknown statuses unknown', () => {
-    expect(mapTaskStatus('delivering')).toBe('delivering')
-    for (const status of ['future-state', 'toString', '__proto__'])
+describe('production C4 adapter', () => {
+  it('uses the cookie gateway without accepting or storing bearer credentials', async () => {
+    vi.mocked(fetch).mockResolvedValue(json({}))
+    await c4Request('/v1/me')
+    const [url, options] = vi.mocked(fetch).mock.calls[0]
+    expect(url).toBe('/api/v1/me')
+    expect(options).toMatchObject({
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+    })
+    expect(new Headers(options?.headers).has('Authorization')).toBe(false)
+  })
+  it('permits only a path on the same origin', () => {
+    for (const value of [
+      'https://other.example/api',
+      '//other.example/api',
+      '/api?x=1',
+      '/api/../x',
+      '/api#x',
+    ])
+      expect(() => apiBase(value)).toThrow()
+    expect(apiBase('/api')).toBe('/api')
+  })
+  it('preserves unknown statuses without inventing completion', () => {
+    for (const status of ['__proto__', 'toString', 'unexpected'])
       expect(mapTaskStatus(status)).toBe('unknown')
-    expect(mapTaskStatus('completed')).toBe('completed')
+    expect(mapTaskStatus('delivering')).toBe('delivering')
   })
-  it('loads only backend data and does not fabricate session or delivery evidence', async () => {
-    mockSnapshot()
-    const data = await loadC4Snapshot()
-    expect(data.runs[0].status).toBe('delivering')
-    expect(data.runs[0].taskSessionId).toBeUndefined()
-    expect(data.runs[0].commitSha).toBeUndefined()
-    expect(data.runs[0].progress).toBe(0)
-    expect(data.workspaces[0].entitlements?.availableCredits).toBe(850)
-    expect(data.artifacts).toEqual([])
-    expect(data.workflows).toEqual([])
+  it('loads only the selected workspace and reports actual results and balance', async () => {
+    snapshotResponses()
+    const result = await loadC4Snapshot(workspaceId)
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(result.entitlements?.availableCredits).toBe(4321)
+    expect(result.runs[0]).not.toHaveProperty('progress')
+    expect(result.runs[0]).not.toHaveProperty('taskSessionId')
+    expect(result.runs[0].resultSummary).toBeNull()
   })
-  it('rejects workspace mismatches from the API', async () => {
-    mockSnapshot({ workspace_id: 'another-workspace' })
-    await expect(loadC4Snapshot()).rejects.toThrow('workspace mismatch')
-  })
-  it('expires an unauthorized session without falling back to demo data', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('', { status: 401 })),
+  it.each(['agents', 'tasks', 'entitlements'] as const)(
+    'rejects a workspace mismatch in %s',
+    async (key) => {
+      const values = { agents: [agent], tasks: [task], entitlements: entitlement }
+      if (key === 'agents') values.agents = [{ ...agent, workspace_id: secondWorkspaceId }]
+      if (key === 'tasks') values.tasks = [{ ...task, workspace_id: secondWorkspaceId }]
+      if (key === 'entitlements')
+        values.entitlements = { ...entitlement, workspace_id: secondWorkspaceId }
+      snapshotResponses(values)
+      await expect(loadC4Snapshot(workspaceId)).rejects.toMatchObject({ status: 403 })
+    },
+  )
+  it('creates a task without automatically starting execution', async () => {
+    vi.mocked(fetch).mockResolvedValue(json(task, 201))
+    await executeC4Command({ type: 'create-run', workspaceId, values: taskValues })
+    expect(fetch).toHaveBeenCalledTimes(1)
+    const [url, options] = vi.mocked(fetch).mock.calls[0]
+    expect(url).toBe('/api/v1/workspaces/' + workspaceId + '/tasks')
+    expect(options?.method).toBe('POST')
+    expect(JSON.parse(String(options?.body))).toEqual(taskValues)
+    expect(new Headers(options?.headers).get('X-Mesthi-Request')).toBe('1')
+    expect(Object.keys(taskValues).sort()).toEqual(
+      Object.keys(contract.components.schemas.TaskCreate.properties).sort(),
     )
-    await expect(loadC4Snapshot()).rejects.toThrow('expired')
-    expect(hasAccessToken()).toBe(false)
   })
-  it('rejects an HTML gateway response and cross-origin token transmission', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('<html/>', { headers: { 'content-type': 'text/html' } })),
-    )
-    await expect(c4Request('/v1/workspaces')).rejects.toThrow('gateway returned HTML')
-    vi.stubEnv('VITE_API_BASE_URL', 'https://other.example')
-    await expect(c4Request('/v1/workspaces')).rejects.toThrow('same-origin')
+  it('saves real agent routing and instructions with PATCH', async () => {
+    vi.mocked(fetch).mockResolvedValue(json(agent))
+    await executeC4Command({
+      type: 'update-agent',
+      workspaceId,
+      agentId,
+      values: { ...agentValues, status: 'disabled' },
+    })
+    const [url, options] = vi.mocked(fetch).mock.calls[0]
+    expect(url).toContain('/agents/' + agentId)
+    expect(options?.method).toBe('PATCH')
+    expect(JSON.parse(String(options?.body))).toMatchObject({
+      system_prompt: 'Write accurately.',
+      status: 'disabled',
+      model_source: 'mesthi_ai',
+    })
+  })
+  it('rejects invalid paths and unsupported lifecycle actions before sending', async () => {
+    await expect(c4Request('/v1/../internal')).rejects.toThrow()
+    await expect(
+      executeC4Command({
+        type: 'run-action',
+        workspaceId,
+        runId: taskId,
+        action: 'approve',
+      } as never),
+    ).rejects.toThrow()
+    await expect(
+      executeC4Command({ type: 'create-run', workspaceId: '../x', values: taskValues }),
+    ).rejects.toThrow()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+  it.each([401, 403, 409, 422, 429])(
+    'returns HTTP %s without retry or fallback',
+    async (status) => {
+      vi.mocked(fetch).mockResolvedValue(json({}, status))
+      await expect(c4Request('/v1/workspaces', 'POST', {})).rejects.toMatchObject({
+        status,
+        uncertain: false,
+      })
+      expect(fetch).toHaveBeenCalledTimes(1)
+    },
+  )
+  it('treats a lost mutation response as unknown, never as success', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('network error'))
+    await expect(c4Request('/v1/workspaces', 'POST', {})).rejects.toMatchObject({ uncertain: true })
     expect(fetch).toHaveBeenCalledTimes(1)
   })
-  it('creates a Task without implicitly queueing or starting it', async () => {
-    const request = vi.fn(
-      async () => new Response('{}', { headers: { 'content-type': 'application/json' } }),
+  it('rejects login HTML and malformed JSON returned as a successful mutation', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response('<html>sign in</html>', { headers: { 'Content-Type': 'text/html' } }),
     )
-    vi.stubGlobal('fetch', request)
-    await executeC4Command({
-      type: 'create-run',
-      workspaceId: ws.id,
-      agentId: agent.id,
-      workflowId: '',
-      title: 'Draft change',
-      brief: 'Implement the task',
-    })
-    expect(request).toHaveBeenCalledTimes(1)
-    const [url, init] = request.mock.calls[0] as unknown as [URL, RequestInit]
-    expect(url.pathname).toBe('/api/v1/workspaces/workspace-1/tasks')
-    expect(init.method).toBe('POST')
-    expect(JSON.parse(init.body as string)).toEqual({
-      agent_id: 'agent-1',
-      title: 'Draft change',
-      instructions: 'Implement the task',
-      priority: 'normal',
-    })
+    await expect(c4Request('/v1/workspaces', 'POST', {})).rejects.toMatchObject({ uncertain: true })
+    vi.mocked(fetch).mockResolvedValue(
+      new Response('{', { headers: { 'Content-Type': 'application/json' } }),
+    )
+    await expect(c4Request('/v1/workspaces', 'POST', {})).rejects.toMatchObject({ uncertain: true })
   })
-  it('refuses unsupported pack installation before any request', async () => {
-    vi.stubGlobal('fetch', vi.fn())
-    await expect(
-      executeC4Command({ type: 'create-workspace', name: 'Studio', packId: 'content' }),
-    ).rejects.toThrow('backend template endpoint')
-    expect(fetch).not.toHaveBeenCalled()
+  it('reads server plan prices and rejects fabricated model-list formats', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(json([plan]))
+      .mockResolvedValueOnce(json({ unknown: [] }))
+    expect((await loadPlans())[0].price_monthly_cents).toBe(2900)
+    await expect(loadModels()).rejects.toBeInstanceOf(ApiError)
   })
 })

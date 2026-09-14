@@ -1,26 +1,10 @@
 import { useState } from 'react'
-import type { Run, RunStatus, Command } from '../core/domain'
-import { mode, useWorkspace } from '../core/runtime'
-import {
-  Avatar,
-  Empty,
-  Icon,
-  Modal,
-  PageHeading,
-  shortTime,
-  Status,
-  statusLabel,
-} from '../components/ui'
+import { useWorkspace } from '../core/runtime'
+import type { Run } from '../core/domain'
+import { Empty, Icon, Modal, PageHeading, Status, downloadText } from '../components/ui'
+import { ConfirmAction, CreateRun } from './CreateDialogs'
 export function RunTable({ runs, onOpen }: { runs: Run[]; onOpen: (id: string) => void }) {
-  const { agents } = useWorkspace()
-  if (!runs.length)
-    return (
-      <Empty
-        title="A clear desk"
-        text="Your team's work will appear here. Start a task when you're ready."
-      />
-    )
-  return (
+  return runs.length ? (
     <div className="table-scroll">
       <table className="run-table">
         <thead>
@@ -28,373 +12,274 @@ export function RunTable({ runs, onOpen }: { runs: Run[]; onOpen: (id: string) =
             <th>Task</th>
             <th>Agent</th>
             <th>Status</th>
-            <th>Progress</th>
-            <th aria-label="Details" />
+            <th>Updated</th>
           </tr>
         </thead>
         <tbody>
-          {runs.map((r) => {
-            const a = agents.find((a) => a.id === r.agentId)
-            return (
-              <tr key={r.id} onClick={() => onOpen(r.id)}>
-                <td>
-                  <button
-                    className="task-title"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onOpen(r.id)
-                    }}
-                  >
-                    <span className="task-glyph">
-                      <Icon name="FileText" size={16} />
-                    </span>
-                    <span>
-                      {r.title}
-                      <small>
-                        {shortTime(r.updatedAt) +
-                          ' · ' +
-                          (mode === 'demo'
-                            ? r.estimatedCredits + ' credits estimated'
-                            : 'Backend task')}
-                      </small>
-                    </span>
-                  </button>
-                </td>
-                <td>
-                  {a ? (
-                    <span className="row gap-2">
-                      <Avatar agent={a} small />
-                      {a.name}
-                    </span>
-                  ) : (
-                    <span className="muted">Unassigned</span>
-                  )}
-                </td>
-                <td>
-                  <Status status={r.status} />
-                </td>
-                <td>
-                  <div className="progress-cell">
-                    <div className="progress-track">
-                      <span style={{ width: r.progress + '%' }} />
-                    </div>
-                    <span>
-                      {mode === 'api' && r.status !== 'completed' ? '—' : r.progress + '%'}
-                    </span>
-                  </div>
-                </td>
-                <td>
-                  <Icon name="ChevronRight" size={15} />
-                </td>
-              </tr>
-            )
-          })}
+          {runs.map((r) => (
+            <tr key={r.id}>
+              <td>
+                <button className="task-title" onClick={() => onOpen(r.id)}>
+                  {r.title}
+                </button>
+                <small className="muted">{r.priority}</small>
+              </td>
+              <td>{r.agentName || 'Unassigned'}</td>
+              <td>
+                <Status status={r.status} />
+              </td>
+              <td>{new Date(r.updatedAt).toLocaleString()}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
+  ) : (
+    <Empty title="A clear desk" text="Tasks will appear here when you create them." />
   )
 }
 export function RunsPage({ onNew, onOpen }: { onNew: () => void; onOpen: (id: string) => void }) {
-  const { runs } = useWorkspace()
-  const [filter, setFilter] = useState('all'),
-    [query, setQuery] = useState(''),
+  const { runs, writable } = useWorkspace()
+  const [query, setQuery] = useState(''),
+    [status, setStatus] = useState('all'),
     [view, setView] = useState('list')
   const filtered = runs.filter(
     (r) =>
-      (filter === 'all' || r.status === filter) &&
-      r.title.toLowerCase().includes(query.toLowerCase()),
+      (r.title + ' ' + r.agentName).toLowerCase().includes(query.toLowerCase()) &&
+      (status === 'all' || r.status === status),
   )
-  const columns: RunStatus[] = [
-    'draft',
-    'queued',
-    'running',
-    'delivering',
-    'awaiting_approval',
-    'paused',
-    'completed',
-    'failed',
-    'cancelled',
-    'unknown',
-  ]
   return (
     <>
       <PageHeading
-        eyebrow="MAKE PROGRESS VISIBLE"
+        eyebrow="FROM AN IDEA TO AN OUTCOME"
         title="Tasks & runs"
-        text="Every brief, every handoff, every outcome. All in one place."
+        text="Create, queue, and start work. Follow the status reported by your team."
         action={
-          <button className="button primary" onClick={onNew}>
+          <button disabled={!writable} className="button primary" onClick={onNew}>
             <Icon name="Plus" />
             New task
           </button>
         }
       />
-      <section className="panel">
-        <div className="panel-toolbar">
-          <div className="search-field">
-            <Icon name="Search" size={16} />
-            <input
-              placeholder="Search tasks…"
-              aria-label="Search tasks"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <div className="row gap-3">
-            <select
-              aria-label="Filter task status"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            >
-              <option value="all">All statuses</option>
-              {Object.entries(statusLabel).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-            <div className="segmented">
-              <button
-                className={view === 'list' ? 'active' : ''}
-                onClick={() => setView('list')}
-                aria-label="List view"
-              >
-                <Icon name="ListTodo" size={16} />
-              </button>
-              <button
-                className={view === 'board' ? 'active' : ''}
-                onClick={() => setView('board')}
-                aria-label="Board view"
-              >
-                <Icon name="Layers" size={16} />
-              </button>
-            </div>
-          </div>
+      <div className="page-tools">
+        <div className="search-field">
+          <Icon name="Search" />
+          <input
+            aria-label="Search tasks"
+            placeholder="Find a task…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </div>
-        {view === 'list' ? (
+        <select
+          aria-label="Filter task status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
+          <option value="all">All statuses</option>
+          {[
+            'draft',
+            'queued',
+            'running',
+            'delivering',
+            'completed',
+            'failed',
+            'cancelled',
+            'paused',
+            'unknown',
+          ].map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
+        <div className="segmented">
+          <button aria-pressed={view === 'list'} onClick={() => setView('list')}>
+            List
+          </button>
+          <button aria-pressed={view === 'board'} onClick={() => setView('board')}>
+            Board
+          </button>
+        </div>
+      </div>
+      {view === 'list' ? (
+        <section className="panel">
           <RunTable runs={filtered} onOpen={onOpen} />
-        ) : (
-          <div className="kanban">
-            {columns
-              .filter(
-                (s) =>
-                  ['running', 'awaiting_approval', 'completed'].includes(s) ||
-                  filtered.some((r) => r.status === s),
-              )
-              .map((s) => (
-                <div className="kanban-column" key={s}>
-                  <h3>
-                    {statusLabel[s]}
-                    <span>{filtered.filter((r) => r.status === s).length}</span>
-                  </h3>
-                  {filtered
-                    .filter((r) => r.status === s)
-                    .map((r) => (
-                      <button className="kanban-card" key={r.id} onClick={() => onOpen(r.id)}>
-                        <Icon name="FileText" />
-                        <strong>{r.title}</strong>
-                        <Status status={r.status} />
-                      </button>
-                    ))}
-                </div>
-              ))}
-          </div>
-        )}
-      </section>
+        </section>
+      ) : (
+        <div className="production-board">
+          {[
+            'draft',
+            'queued',
+            'running',
+            'delivering',
+            'completed',
+            'failed',
+            'cancelled',
+            'paused',
+            'unknown',
+          ]
+            .filter((s) => filtered.some((r) => r.status === s))
+            .map((s) => (
+              <section className="board-column" key={s}>
+                <h2>{s.replaceAll('_', ' ')}</h2>
+                {filtered
+                  .filter((r) => r.status === s)
+                  .map((r) => (
+                    <button className="panel board-task" key={r.id} onClick={() => onOpen(r.id)}>
+                      <strong>{r.title}</strong>
+                      <span>{r.agentName}</span>
+                      <Status status={r.status} />
+                    </button>
+                  ))}
+              </section>
+            ))}
+        </div>
+      )}
     </>
   )
 }
 export function RunDetail({ runId, onClose }: { runId: string; onClose: () => void }) {
-  const { runs, agents, workflows, command, activeId, busy, artifacts, navigate } = useWorkspace()
-  const r = runs.find((r) => r.id === runId)
+  const { runs, activeId, command, writable } = useWorkspace()
+  const [action, setAction] = useState<'queue' | 'start' | 'cancel' | 'delete' | ''>(''),
+    [editing, setEditing] = useState(false)
+  const r = runs.find((run) => run.id === runId)
   if (!r) return null
-  const a = agents.find((a) => a.id === r.agentId),
-    f = workflows.find((f) => f.id === r.workflowId)
-  const act = async (action: Extract<Command, { type: 'run-action' }>['action']) => {
-    await command({ type: 'run-action', workspaceId: activeId, runId, action })
+  if (editing) return <CreateRun task={r} onClose={() => setEditing(false)} />
+  if (action) {
+    const titles = {
+      queue: 'Queue task',
+      start: 'Start task',
+      cancel: 'Cancel task',
+      delete: 'Delete task',
+    }
+    const explanations = {
+      queue: 'Add this task to the backend queue.',
+      start:
+        'Start actual execution using the configured agent, model, tools, and repository. Workspace limits and provider usage apply.',
+      cancel:
+        'Ask the backend to cancel this task. Already completed external actions cannot be reversed here.',
+      delete: 'Permanently remove this task record according to backend retention rules.',
+    }
+    return (
+      <ConfirmAction
+        title={titles[action]}
+        name={r.title}
+        description={explanations[action]}
+        destructive={action === 'delete'}
+        onClose={() => setAction('')}
+        onConfirm={async () => {
+          if (
+            await command(
+              action === 'delete'
+                ? { type: 'delete-run', workspaceId: activeId, runId }
+                : { type: 'run-action', workspaceId: activeId, runId, action },
+            )
+          ) {
+            setAction('')
+            if (action === 'delete') onClose()
+          }
+        }}
+      />
+    )
   }
+  const editable = r.status === 'draft',
+    removable = ['draft', 'completed', 'cancelled', 'failed'].includes(r.status)
   return (
-    <Modal title={r.title} onClose={onClose} wide>
-      <div className="row-between mt-4">
+    <Modal title={r.title} onClose={onClose}>
+      <div className="row-between">
         <Status status={r.status} />
-        {a && (
-          <span className="row gap-2">
-            <Avatar agent={a} small />
-            {a.name + ' · ' + a.role}
-          </span>
-        )}
+        <span className="muted">{r.priority} priority</span>
       </div>
-      <section className="detail-section">
-        <h3>Brief</h3>
-        <p className="pre-wrap">{r.brief}</p>
-      </section>
-      {f && (
-        <section className="detail-section">
-          <h3>Workflow</h3>
-          <div className="step-pills">
-            {f.steps.map((s, i) => (
-              <span
-                key={s}
-                className={r.progress >= ((i + 1) / f.steps.length) * 100 ? 'done' : ''}
-              >
-                <b>{i + 1}</b>
-                {s}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-      <section className="detail-section">
-        <h3>Activity trail</h3>
-        <ol className="event-list">
-          {r.log.map((event, i) => (
-            <li key={i}>
-              <i />
-              <span>{event}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-      {r.status === 'awaiting_approval' && (
-        <div className="approval-notice">
-          <Icon name="ShieldCheck" />
-          <div>
-            <strong>A human decision is needed</strong>
-            <p>
-              {mode === 'demo'
-                ? 'Approve to continue the local simulation. Nothing will be posted or sent.'
-                : 'Review the exact artifact and destination before approval.'}
-            </p>
-            <p className="pre-wrap">{r.brief}</p>
-          </div>
+      <dl className="detail-grid">
+        <dt>Agent</dt>
+        <dd>{r.agentName || 'Unassigned'}</dd>
+        <dt>Task ID</dt>
+        <dd>
+          <code>{r.id}</code>
+        </dd>
+        <dt>Server status</dt>
+        <dd>{r.backendStatus}</dd>
+        <dt>Repository</dt>
+        <dd>{r.repository ?? 'None'}</dd>
+        <dt>Branch</dt>
+        <dd>{r.branchName ?? 'Not assigned'}</dd>
+        <dt>Started</dt>
+        <dd>{r.startedAt ? new Date(r.startedAt).toLocaleString() : 'Not started'}</dd>
+        <dt>Completed</dt>
+        <dd>{r.completedAt ? new Date(r.completedAt).toLocaleString() : 'Not completed'}</dd>
+      </dl>
+      <h3>Instructions</h3>
+      <pre className="result-text">{r.brief}</pre>
+      {r.errorMessage && (
+        <div className="form-error" role="alert">
+          {r.errorMessage}
         </div>
       )}
-      <details className="technical-detail">
-        <summary>Execution details</summary>
-        <dl>
-          <dt>Workspace</dt>
-          <dd>{r.workspaceId}</dd>
-          <dt>Task / run</dt>
-          <dd>{r.taskId ?? r.id}</dd>
-          <dt>TaskSession</dt>
-          <dd>
-            {r.taskSessionId ??
-              (mode === 'demo' ? 'Not created in demo' : 'Not exposed by TaskRead')}
-          </dd>
-          <dt>Delivery</dt>
-          <dd>{r.deliveryStatus ?? 'Not exposed'}</dd>
-          <dt>Branch</dt>
-          <dd>{r.branchName ?? 'Not available'}</dd>
-          <dt>Commit / remote SHA</dt>
-          <dd>{(r.commitSha ?? 'Not exposed') + ' / ' + (r.remoteSha ?? 'Not exposed')}</dd>
-          <dt>Backend status</dt>
-          <dd>{r.backendStatus ?? 'Local demo'}</dd>
-        </dl>
-      </details>
-      <div className="modal-actions">
-        <button className="button secondary" onClick={onClose}>
-          Close
-        </button>
-        {mode === 'demo' && r.status === 'running' && (
-          <button disabled={busy} className="button secondary" onClick={() => act('pause')}>
-            <Icon name="Pause" />
-            Pause
+      {r.resultSummary && (
+        <>
+          <div className="row-between">
+            <h3>Result from your agent</h3>
+            <button
+              className="text-button"
+              onClick={() => downloadText(r.title + '.md', r.resultSummary!)}
+            >
+              <Icon name="Download" />
+              Download
+            </button>
+          </div>
+          <pre className="result-text">{r.resultSummary}</pre>
+        </>
+      )}
+      <div className="modal-actions wrap">
+        {removable && (
+          <button
+            disabled={!writable}
+            className="text-button danger-text"
+            onClick={() => setAction('delete')}
+          >
+            Delete task
           </button>
         )}
-        {mode === 'demo' && r.status === 'paused' && (
-          <button disabled={busy} className="button primary" onClick={() => act('resume')}>
-            <Icon name="Play" />
-            Resume
+        {editable && (
+          <button
+            disabled={!writable}
+            className="button secondary"
+            onClick={() => setEditing(true)}
+          >
+            Edit task
           </button>
         )}
-        {mode === 'api' && r.status === 'draft' && (
-          <button disabled={busy} className="button primary" onClick={() => act('queue')}>
+        {editable && (
+          <button
+            disabled={!writable}
+            className="button primary"
+            onClick={() => setAction('queue')}
+          >
             Queue task
           </button>
         )}
-        {mode === 'api' && r.status === 'queued' && (
-          <button disabled={busy} className="button primary" onClick={() => act('start')}>
+        {r.status === 'queued' && (
+          <button
+            disabled={!writable}
+            className="button primary"
+            onClick={() => setAction('start')}
+          >
+            <Icon name="Play" />
             Start task
           </button>
         )}
-        {r.status === 'awaiting_approval' && (
-          <>
-            <button disabled={busy} className="button secondary" onClick={() => act('reject')}>
-              Reject
-            </button>
-            <button disabled={busy} className="button primary" onClick={() => act('approve')}>
-              <Icon name="Check" />
-              Approve draft
-            </button>
-          </>
-        )}
-        {!['completed', 'cancelled', 'failed', 'unknown'].includes(r.status) && (
-          <button disabled={busy} className="button quiet danger" onClick={() => act('cancel')}>
-            Cancel run
-          </button>
-        )}
-        {artifacts.some((a) => a.runId === r.id) && (
+        {['draft', 'queued', 'running', 'delivering'].includes(r.status) && (
           <button
-            className="button primary"
-            onClick={() => {
-              onClose()
-              navigate('artifacts')
-            }}
+            disabled={!writable}
+            className="button secondary"
+            onClick={() => setAction('cancel')}
           >
-            View output
-            <Icon name="ArrowUpRight" />
+            Cancel task
           </button>
         )}
+        <button className="button secondary" onClick={onClose}>
+          Close
+        </button>
       </div>
     </Modal>
-  )
-}
-export function ApprovalsPage({ onOpen }: { onOpen: (id: string) => void }) {
-  const { runs, agents } = useWorkspace(),
-    pending = runs.filter((r) => r.status === 'awaiting_approval')
-  return (
-    <>
-      <PageHeading
-        eyebrow="YOUR JUDGMENT MATTERS"
-        title="Approvals"
-        text="Your team does the groundwork. You make the final call."
-      />
-      <div className="approval-grid">
-        {pending.map((r) => (
-          <article className="panel approval-card" key={r.id}>
-            <div className="row-between">
-              <span className="review-label">
-                <Icon name="ShieldCheck" />
-                REVIEW REQUEST
-              </span>
-              <span className="muted">{shortTime(r.updatedAt)}</span>
-            </div>
-            <h2>{r.title}</h2>
-            <p>{r.brief}</p>
-            <div className="row-between">
-              <span className="muted">
-                Prepared by {agents.find((a) => a.id === r.agentId)?.name ?? 'your team'}
-              </span>
-              <button className="button primary" onClick={() => onOpen(r.id)}>
-                Review draft
-                <Icon name="ArrowRight" />
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-      {!pending.length && (
-        <section className="panel">
-          <Empty
-            title={mode === 'api' ? 'Approval API extension required' : "You're all caught up"}
-            text={
-              mode === 'api'
-                ? 'The verified C4 contract does not expose a general content approval queue.'
-                : 'Work that needs your approval will appear here before delivery.'
-            }
-          />
-        </section>
-      )}
-    </>
   )
 }

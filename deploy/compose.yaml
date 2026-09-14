@@ -1,0 +1,55 @@
+name: mesthi-frontend
+services:
+  frontend:
+    image: ${MESTHI_FRONTEND_IMAGE:?Set an immutable frontend image digest}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ['/tmp:uid=101,gid=101,mode=1777']
+    networks:
+      gateway: {}
+      edge:
+        aliases: [mesthi-frontend]
+    depends_on: [auth]
+    mem_limit: 256m
+    cpus: 0.5
+  auth:
+    image: ${OAUTH2_PROXY_IMAGE:?Set an approved OAuth2 Proxy image digest}
+    user: '65532:65532'
+    command: ['--config=/run/secrets/oauth2_proxy_config']
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    secrets: [oauth2_proxy_config]
+    tmpfs: [/tmp]
+    networks: [gateway, sessions]
+    depends_on: [redis]
+    mem_limit: 128m
+    cpus: 0.25
+  redis:
+    image: ${REDIS_IMAGE:?Set an approved Redis image digest}
+    command: ['redis-server', '/run/secrets/redis_config']
+    restart: unless-stopped
+    read_only: true
+    user: '999:999'
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    secrets: [redis_config]
+    tmpfs: ['/data:uid=999,gid=999,mode=0700', '/tmp']
+    networks: [sessions]
+    mem_limit: 192m
+    cpus: 0.25
+secrets:
+  oauth2_proxy_config:
+    file: ./secrets/oauth2-proxy.cfg
+  redis_config:
+    file: ./secrets/redis.conf
+networks:
+  gateway: {}
+  sessions:
+    internal: true
+  edge:
+    external: true
+    name: ${MESTHI_EDGE_NETWORK:?Set the existing TLS nginx Docker network}
