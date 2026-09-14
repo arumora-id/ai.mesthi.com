@@ -181,14 +181,12 @@ test.afterEach(async ({ page }, info) => {
     console.log('FAILED_BODY:', (await page.locator('body').innerText()).slice(0, 10000))
     console.log(
       'FAILED_DIALOGS:',
-      await page
-        .locator('dialog')
-        .evaluateAll((nodes) =>
-          nodes.map((n) => ({
-            open: (n as HTMLDialogElement).open,
-            text: (n as HTMLElement).innerText.slice(0, 1500),
-          })),
-        ),
+      await page.locator('dialog').evaluateAll((nodes) =>
+        nodes.map((n) => ({
+          open: (n as HTMLDialogElement).open,
+          text: (n as HTMLElement).innerText.slice(0, 1500),
+        })),
+      ),
     )
   }
 })
