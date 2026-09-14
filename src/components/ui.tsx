@@ -1,4 +1,13 @@
-import { useEffect, useRef, type ReactNode, type CSSProperties } from 'react'
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useId,
+  useRef,
+  type ReactNode,
+  type CSSProperties,
+} from 'react'
 import {
   Activity,
   ArrowRight,
@@ -262,12 +271,25 @@ export function Field({
   children: ReactNode
   hint?: string
 }) {
+  const controlId = useId()
+  const hintId = controlId + '-hint'
   return (
-    <label className="field">
-      <span>{label}</span>
-      {children}
-      {hint && <small>{hint}</small>}
-    </label>
+    <div className="field">
+      <label htmlFor={controlId}>{label}</label>
+      {Children.map(children, (child) =>
+        isValidElement<{ id?: string; 'aria-describedby'?: string }>(child) &&
+        typeof child.type === 'string' &&
+        ['input', 'textarea', 'select'].includes(child.type)
+          ? cloneElement(child, {
+              id: controlId,
+              'aria-describedby':
+                [child.props['aria-describedby'], hint ? hintId : ''].filter(Boolean).join(' ') ||
+                undefined,
+            })
+          : child,
+      )}
+      {hint && <small id={hintId}>{hint}</small>}
+    </div>
   )
 }
 export function downloadText(name: string, text: string) {

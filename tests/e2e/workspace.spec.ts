@@ -80,8 +80,11 @@ test('edits an agent and keeps workspace data isolated', async ({ page }) => {
     .filter({ has: page.getByRole('heading', { name: 'Research agent', exact: true }) })
     .click()
   await page.getByRole('button', { name: 'Configure agent', exact: true }).click()
+  await expect(page.getByLabel('System instructions', { exact: true })).toHaveAccessibleName(
+    'System instructions',
+  )
   await page.getByLabel('System instructions', { exact: true }).fill('Use only approved sources.')
-  await page.getByLabel(/^Model ID/).fill('configured-model')
+  await page.getByLabel('Model ID', { exact: true }).fill('configured-model')
   await page.getByRole('button', { name: 'Save agent', exact: true }).click()
   await expect.poll(() => api.agents[0].system_prompt).toBe('Use only approved sources.')
   expect(api.calls.some((c) => c.method === 'PATCH' && c.path.endsWith('/agents/' + agentId))).toBe(
@@ -162,6 +165,9 @@ test('supports GSAP, keyboard navigation, and reduced-motion mobile content', as
     .getByLabel('Creative brief', { exact: true })
     .fill('Write a product launch storyboard.')
   await page.getByRole('button', { name: 'Choose agent & create task' }).click()
+  await expect(page.getByLabel('Instructions', { exact: true })).toHaveAccessibleName(
+    'Instructions',
+  )
   await expect(page.getByLabel('Instructions', { exact: true })).toHaveValue(
     /Write a product launch storyboard/,
   )
