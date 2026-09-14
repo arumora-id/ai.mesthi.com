@@ -198,7 +198,7 @@ export function SettingsPage({
           <p>Your administrator must connect these services before they can be used.</p>
           <a
             className="text-button"
-            href="https://github.com/arumora-id/ai.mesthi.com/blob/feat/production-api-runtime/docs/PRODUCTION_READINESS.md"
+            href="https://github.com/arumora-id/ai.mesthi.com/blob/main/docs/PRODUCTION_READINESS.md"
             target="_blank"
             rel="noreferrer"
           >

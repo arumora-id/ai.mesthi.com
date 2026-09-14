@@ -167,3 +167,15 @@ describe('production C4 adapter', () => {
     await expect(loadModels()).rejects.toBeInstanceOf(ApiError)
   })
 })
+
+it('refuses malformed or out-of-scope mutation results even when HTTP succeeded', async () => {
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(json({ ok: true }))
+    .mockResolvedValueOnce(json({ ...agent, workspace_id: secondWorkspaceId }))
+  await expect(
+    executeC4Command({ type: 'create-agent', workspaceId, values: agentValues }),
+  ).rejects.toMatchObject({ uncertain: true })
+  await expect(
+    executeC4Command({ type: 'create-agent', workspaceId, values: agentValues }),
+  ).rejects.toMatchObject({ status: 403, uncertain: true })
+})

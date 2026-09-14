@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { installApi, secondWorkspaceId } from './apiFixture'
 import { agentId, timestamp } from '../fixtures/c4'
 test.beforeEach(async ({ page }) => {
+  page.on('pageerror', (error) => console.log('BROWSER_ERROR:', error.message))
   await page.emulateMedia({ reducedMotion: 'reduce' })
 })
 test('requires authentication and never restores old demo business data', async ({ page }) => {
@@ -172,4 +173,22 @@ test('supports GSAP, keyboard navigation, and reduced-motion mobile content', as
   await page.screenshot({ path: 'test-results/screenshots/production-mobile.png', fullPage: true })
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus) {
+    console.log('FAILED_PAGE:', page.url())
+    console.log('FAILED_BODY:', (await page.locator('body').innerText()).slice(0, 10000))
+    console.log(
+      'FAILED_DIALOGS:',
+      await page
+        .locator('dialog')
+        .evaluateAll((nodes) =>
+          nodes.map((n) => ({
+            open: (n as HTMLDialogElement).open,
+            text: (n as HTMLElement).innerText.slice(0, 1500),
+          })),
+        ),
+    )
+  }
 })

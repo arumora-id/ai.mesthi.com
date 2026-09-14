@@ -309,64 +309,96 @@ export async function loadModels(signal?: AbortSignal): Promise<string[]> {
     )
   return [...new Set(parsed.data.data.map((m) => m.id))]
 }
+async function mutate<T extends { id: string; workspace_id?: string }>(
+  path: string,
+  method: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+  scope: { workspaceId?: string; recordId?: string } = {},
+): Promise<T> {
+  const parsed = schema.safeParse(await c4Request(path, method, body))
+  if (!parsed.success)
+    throw new ApiError(
+      'The operation returned an unexpected result. Refresh and review the server state before trying again.',
+      200,
+      true,
+    )
+  if (
+    (scope.workspaceId && parsed.data.workspace_id !== scope.workspaceId) ||
+    (scope.recordId && parsed.data.id !== scope.recordId)
+  )
+    throw new ApiError('The service returned a result outside the requested resource.', 403, true)
+  return parsed.data
+}
 export async function executeC4Command(cmd: Command): Promise<string | undefined> {
   if (cmd.type === 'create-workspace') {
-    const raw = await c4Request(
+    const result = await mutate(
       '/v1/workspaces',
       'POST',
       workspaceInput.parse({ name: cmd.name, description: cmd.description }),
+      workspaceDTO,
     )
-    const parsed = workspaceDTO.safeParse(raw)
-    if (!parsed.success)
-      throw new ApiError(
-        'Workspace creation was accepted but its response could not be verified. Refresh before creating another workspace.',
-        200,
-        true,
-      )
-    return parsed.data.id
+    return result.id
   }
   const base = '/v1/workspaces/' + id.parse(cmd.workspaceId)
   switch (cmd.type) {
     case 'update-workspace':
-      await c4Request(
+      await mutate(
         base,
         'PATCH',
         workspaceInput.parse({ name: cmd.name, description: cmd.description }),
+        workspaceDTO,
+        { recordId: cmd.workspaceId },
       )
       break
     case 'delete-workspace':
       await c4Request(base, 'DELETE')
       break
     case 'create-agent':
-      await c4Request(base + '/agents', 'POST', agentInput.parse(cmd.values))
+      await mutate(base + '/agents', 'POST', agentInput.parse(cmd.values), agentDTO, {
+        workspaceId: cmd.workspaceId,
+      })
       break
     case 'update-agent':
-      await c4Request(
+      await mutate(
         base + '/agents/' + id.parse(cmd.agentId),
         'PATCH',
         agentInput.extend({ status: z.enum(['active', 'disabled']) }).parse(cmd.values),
+        agentDTO,
+        { workspaceId: cmd.workspaceId, recordId: cmd.agentId },
       )
       break
     case 'delete-agent':
       await c4Request(base + '/agents/' + id.parse(cmd.agentId), 'DELETE')
       break
     case 'create-run':
-      await c4Request(base + '/tasks', 'POST', taskInput.parse(cmd.values))
+      await mutate(base + '/tasks', 'POST', taskInput.parse(cmd.values), taskDTO, {
+        workspaceId: cmd.workspaceId,
+      })
       break
     case 'update-run':
-      await c4Request(base + '/tasks/' + id.parse(cmd.runId), 'PATCH', taskInput.parse(cmd.values))
+      await mutate(
+        base + '/tasks/' + id.parse(cmd.runId),
+        'PATCH',
+        taskInput.parse(cmd.values),
+        taskDTO,
+        { workspaceId: cmd.workspaceId, recordId: cmd.runId },
+      )
       break
     case 'delete-run':
       await c4Request(base + '/tasks/' + id.parse(cmd.runId), 'DELETE')
       break
     case 'run-action':
-      await c4Request(
+      await mutate(
         base +
           '/tasks/' +
           id.parse(cmd.runId) +
           '/' +
           z.enum(['queue', 'start', 'cancel']).parse(cmd.action),
         'POST',
+        undefined,
+        taskDTO,
+        { workspaceId: cmd.workspaceId, recordId: cmd.runId },
       )
       break
     default:

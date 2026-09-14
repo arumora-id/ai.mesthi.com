@@ -65,7 +65,7 @@ export async function installApi(page: Page) {
     if (resource === 'entitlements')
       return route.fulfill({ json: { ...entitlement, workspace_id: wid } })
     if (resource === 'agents') {
-      if (method === 'POST') {
+      if (method === 'POST' && !recordId) {
         const record = { ...agent, ...body, id: crypto.randomUUID(), workspace_id: wid }
         state.agents.push(record)
         return route.fulfill({ status: 201, json: record })
@@ -83,7 +83,7 @@ export async function installApi(page: Page) {
       return route.fulfill({ json: state.agents.filter((a) => a.workspace_id === wid) })
     }
     if (resource === 'tasks') {
-      if (method === 'POST') {
+      if (method === 'POST' && !recordId) {
         const record = { ...task, ...body, id: crypto.randomUUID(), workspace_id: wid }
         state.tasks.push(record)
         return route.fulfill({ status: 201, json: record })
