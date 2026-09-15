@@ -1,6 +1,17 @@
 import { z } from 'zod'
 import type { Command, RunStatus, Snapshot } from './domain'
 import { agentColors } from './catalog'
+import {
+  authMode,
+  getAccessToken,
+  markAuthenticated,
+  markUnauthenticated,
+  setAccessToken,
+  hasAccessToken,
+} from './auth'
+
+export { setAccessToken, hasAccessToken }
+
 // DTOs verified against the canonical C4 OpenAPI contract, API 1.12.1.
 const workspaceDTO = z.object({
   id: z.string(),
@@ -61,36 +72,34 @@ export function mapTaskStatus(status: string): RunStatus {
   }
   return Object.hasOwn(map, status) ? map[status] : 'unknown'
 }
-let accessToken = ''
-export function setAccessToken(token: string) {
-  accessToken = token.trim()
-}
-export function hasAccessToken() {
-  return Boolean(accessToken)
-}
+
 export async function c4Request(path: string, method = 'GET', body?: unknown): Promise<unknown> {
-  if (!accessToken)
+  const accessToken = getAccessToken()
+  if (authMode === 'bearer' && !accessToken)
     throw new Error('Connect an authorized API session in Settings to load the C4 backend.')
+
   const base = import.meta.env.VITE_API_BASE_URL || '/api'
   const url = new URL(base.replace(/\/$/, '') + path, location.origin)
   if (url.origin !== location.origin)
     throw new Error('Use a same-origin /api reverse proxy to the Mesthi control plane.')
+
   const response = await fetch(url, {
     method,
-    credentials: 'omit',
+    credentials: authMode === 'session' ? 'same-origin' : 'omit',
     cache: 'no-store',
     signal: AbortSignal.timeout(15000),
     headers: {
       Accept: 'application/json',
-      Authorization: 'Bearer ' + accessToken,
+      ...(accessToken ? { Authorization: 'Bearer ' + accessToken } : {}),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
+
   if (!response.ok) {
     if (response.status === 401) {
-      accessToken = ''
-      throw new Error('Your API session is missing or expired. Connect again in Settings.')
+      markUnauthenticated()
+      throw new Error('Your session is missing or expired. Sign in again to continue.')
     }
     if (response.status === 403)
       throw new Error('Your account does not have permission for this operation.')
@@ -100,6 +109,8 @@ export async function c4Request(path: string, method = 'GET', body?: unknown): P
         '). Refresh the task before retrying.',
     )
   }
+
+  markAuthenticated()
   if (response.status === 204) return null
   if (!response.headers.get('content-type')?.includes('application/json'))
     throw new Error('The gateway returned HTML. Configure /api to proxy the C4 API.')
